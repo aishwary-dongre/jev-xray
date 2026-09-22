@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why Jev answered 0.73</title>
+<style>
+:root {
+  --ink: #1a1d21;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --bg: #ffffff;
+  --panel: #f9fafb;
+  --pos: 34, 160, 90;
+  --neg: 205, 60, 55;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 32px;
+  background: var(--bg); color: var(--ink);
+  font: 15px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.wrap { max-width: 900px; margin: 0 auto; }
+h1 { font-size: 19px; margin: 0 0 4px; letter-spacing: -0.01em; }
+h2 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--muted); margin: 32px 0 12px; font-weight: 600;
+}
+.sub { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+.sub code { background: var(--panel); padding: 1px 5px; border-radius: 3px; }
+
+.headline { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.stat {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 12px 16px; min-width: 132px;
+}
+.stat .k {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); font-weight: 600;
+}
+.stat .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.stat .v.sm { font-size: 15px; font-weight: 500; }
+
+.state {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 20px 22px; white-space: pre-wrap; word-wrap: break-word;
+  font: 15px/1.85 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.seg { border-radius: 3px; padding: 1px 2px; }
+.seg.inert { color: #9aa1aa; }
+
+.legend { display: flex; gap: 18px; align-items: center; margin-top: 12px;
+          font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.swatch { display: inline-block; width: 26px; height: 11px;
+          border-radius: 2px; vertical-align: -1px; margin-right: 6px; }
+
+table.bars { width: 100%; border-collapse: collapse; }
+table.bars td { padding: 5px 0; vertical-align: middle; border: 0; }
+td.lbl { width: 172px; font-size: 13px; color: var(--muted);
+         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+         padding-right: 14px; }
+td.num { width: 78px; text-align: right; font-size: 13px;
+         font-variant-numeric: tabular-nums; padding-left: 12px; }
+td.txt { font-size: 13px; color: var(--muted); padding-left: 14px;
+         max-width: 300px; overflow: hidden; text-overflow: ellipsis;
+         white-space: nowrap; }
+.track { display: flex; height: 18px; }
+.half { width: 50%; display: flex; }
+.half.left { justify-content: flex-end; border-right: 1px solid var(--line); }
+.half.right { justify-content: flex-start; }
+.bar { height: 100%; border-radius: 2px; min-width: 1px; }
+.bar.pos { background: rgba(var(--pos), 0.8); }
+.bar.neg { background: rgba(var(--neg), 0.8); }
+
+.note {
+  border-left: 3px solid #d97706; background: #fffbeb;
+  padding: 14px 18px; border-radius: 0 6px 6px 0; font-size: 14px;
+}
+.note.ok { border-left-color: #059669; background: #ecfdf5; }
+.note b { font-weight: 650; }
+.note p { margin: 0 0 8px; }
+.note p:last-child { margin: 0; }
+
+footer { margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--line);
+         font-size: 12px; color: var(--muted); }
+footer code { background: var(--panel); padding: 1px 5px; border-radius: 3px; }
+</style></head>
+<body><div class="wrap">
+
+<h1>Why Jev answered 0.73</h1>
+<div class="sub">
+  asked <code>The customer is asking for a refund.</code>
+  &nbsp;&middot;&nbsp; question id <code>refund_requested</code>
+  &nbsp;&middot;&nbsp; model <code>fake-jev-1</code>
+</div>
+
+<div class="headline"><div class="stat"><div class="k">answer</div><div class="v">0.7311</div><div class="k" style="font-weight:400;text-transform:none;letter-spacing:0">P(yes)</div></div><div class="stat"><div class="k">empty state</div><div class="v">0.2315</div><div class="k" style="font-weight:400;text-transform:none;letter-spacing:0">with all evidence removed</div></div><div class="stat"><div class="k">total swing</div><div class="v">+0.4996</div><div class="k" style="font-weight:400;text-transform:none;letter-spacing:0">full minus empty</div></div><div class="stat"><div class="k">segments</div><div class="v">5</div><div class="k" style="font-weight:400;text-transform:none;letter-spacing:0">delete ablation</div></div></div>
+
+<h2>the state, tinted by influence</h2><div class="state"><span class="seg inert" title="no measurable effect">Hi - I ordered the blue jacket on the 3rd and it still hasn&#x27;t shipped.</span>
+<span class="seg" style="background: rgba(var(--pos), 0.20);" title="sentence 1: removing this moves P(yes) by -0.0854 (to 0.6457)">This is the second time I&#x27;ve had to write in about this order.</span>
+<span class="seg" style="background: rgba(var(--neg), 0.23);" title="sentence 2: removing this moves P(yes) by +0.1271 (to 0.8581)">I&#x27;ve been a customer for four years and normally everything is fine.</span>
+<span class="seg" style="background: rgba(var(--pos), 0.62);" title="sentence 3: removing this moves P(yes) by -0.5631 (to 0.1680)">At this point I&#x27;d just like my money back rather than wait any longer.</span>
+<span class="seg inert" title="no measurable effect">Your support page says orders ship within two business days.</span></div><div class="legend"><span><span class="swatch" style="background:rgba(var(--pos),0.6)"></span>held the answer up</span><span><span class="swatch" style="background:rgba(var(--neg),0.6)"></span>pushed against it</span><span><span class="swatch" style="background:#e5e7eb"></span>no effect</span><span>hover any span for its exact delta</span></div>
+
+<h2>ranked evidence</h2>
+<table class="bars"><tr><td class="lbl">sentence 3</td><td><div class="track"><div class="half left"></div><div class="half right"><div class="bar pos" style="width:100.0%"></div></div></div></td><td class="num">+0.5631</td><td class="txt">At this point I&#x27;d just like my money back rather than wait any …</td></tr><tr><td class="lbl">sentence 2</td><td><div class="track"><div class="half left"><div class="bar neg" style="width:22.6%"></div></div><div class="half right"></div></div></td><td class="num">-0.1271</td><td class="txt">I&#x27;ve been a customer for four years and normally everything is …</td></tr><tr><td class="lbl">sentence 1</td><td><div class="track"><div class="half left"></div><div class="half right"><div class="bar pos" style="width:15.2%"></div></div></div></td><td class="num">+0.0854</td><td class="txt">This is the second time I&#x27;ve had to write in about this order.</td></tr><tr><td class="lbl">sentence 0</td><td><div class="track"><div class="half left"></div><div class="half right"></div></div></td><td class="num">+0.0000</td><td class="txt">Hi - I ordered the blue jacket on the 3rd and it still hasn&#x27;t s…</td></tr><tr><td class="lbl">sentence 4</td><td><div class="track"><div class="half left"></div><div class="half right"></div></div></td><td class="num">+0.0000</td><td class="txt">Your support page says orders ship within two business days.</td></tr></table>
+
+<h2>can you trust this map</h2>
+<div class="note ok"><p><b>These effects are additive.</b> The individual deltas sum to +0.5214, against a total swing of +0.4996 between the full and empty state. A residual of -0.0218 means the segments act independently, so leave-one-out is an adequate account of this decision.</p></div>
+
+
+
+<footer>
+  Measured by ablation: each segment was removed and the identical question asked
+  again. Explains the model's sensitivity to its input, not its internal reasoning.
+  <br>
+  7 requests
+  
+  &middot; 676 input tokens
+  &middot; $0.000028
+  &middot; 0.00s
+  &middot; generated 2026-09-22 12:30 UTC
+  &middot; <code>jev-xray</code>
+</footer>
+
+</div></body></html>

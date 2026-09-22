@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "jev-xray"
+version = "0.1.0.dev0"
+description = "Decision forensics for System One models: attribution, counterfactuals and stability probes for TypeSafe AI's Jev."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+keywords = ["jev", "typesafe", "system-one", "interpretability", "attribution", "xai"]
+
+dependencies = [
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+jev-xray = "jev_xray.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jev_xray"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
