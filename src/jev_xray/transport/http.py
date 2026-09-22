@@ -22,6 +22,7 @@ __all__ = [
     "HttpTransport",
     "TYPESAFE_ENDPOINT",
     "VERCEL_TYPESAFE_ENDPOINT",
+    "LANGSMITH_ENDPOINT",
     "LOCAL_ENDPOINT",
     "PROVIDERS",
     "resolve_provider",
@@ -46,13 +47,21 @@ VERCEL_TYPESAFE_ENDPOINT = "https://ai-gateway.vercel.sh/typesafe/v1/systemone"
 # neither an account nor a payment method.
 LOCAL_ENDPOINT = "http://localhost:8000/v1/systemone"
 
+# LangSmith's LLM Gateway. Its default model here is SemIf, an open reproduction
+# of the System One interface that LangChain hosts and bills to nobody — the only
+# route to a live hosted decision model that needs no payment method. Jev itself
+# is reachable through the same endpoint with a `typesafe/` model prefix, but that
+# is bring-your-own-key and needs a TypeSafe secret in the workspace.
+LANGSMITH_ENDPOINT = "https://gateway.smith.langchain.com/v1/systemone"
+
 PROVIDERS: dict[str, tuple[str, str, str]] = {
     "typesafe": (TYPESAFE_ENDPOINT, "jev-1.13.0", "TYPESAFE_API_KEY"),
     "vercel": (VERCEL_TYPESAFE_ENDPOINT, "jev-1.13.0", "AI_GATEWAY_API_KEY"),
+    "langsmith": (LANGSMITH_ENDPOINT, "semif-qwen3.5-4b", "LANGSMITH_API_KEY"),
     "local": (LOCAL_ENDPOINT, "jev-1.13.0", "TYPESAFE_API_KEY"),
 }
 
-_KEY_ENV_ORDER = ("TYPESAFE_API_KEY", "AI_GATEWAY_API_KEY")
+_KEY_ENV_ORDER = ("TYPESAFE_API_KEY", "AI_GATEWAY_API_KEY", "LANGSMITH_API_KEY")
 
 _RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})
 

@@ -312,6 +312,7 @@ def to_html(attribution: Attribution, *, limit: int = 12, title: str | None = No
   {f"&middot; {ledger.avoided_requests} avoided by cache" if ledger.avoided_requests else ""}
   &middot; {ledger.input_tokens:,} input tokens
   &middot; ${ledger.usd:.6f}
+  {"&middot; token counts estimated, this host reported none, so spend is a projection at the configured price rather than a measurement" if ledger.tokens_are_estimated else ""}
   &middot; {ledger.wall_seconds:.2f}s
   &middot; generated {generated}
   &middot; <code>jev-xray</code>

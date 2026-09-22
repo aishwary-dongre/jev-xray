@@ -94,6 +94,7 @@ class Ledger:
     coalesced_requests: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    estimated_requests: int = 0
     started_at: float = field(default_factory=time.monotonic)
     _finished_at: float | None = None
 
@@ -109,10 +110,24 @@ class Ledger:
     def finish(self) -> None:
         self._finished_at = time.monotonic()
 
-    def record(self, *, input_tokens: int, output_tokens: int = 0) -> None:
+    def record(
+        self, *, input_tokens: int, output_tokens: int = 0, estimated: bool = False
+    ) -> None:
         self.requests += 1
         self.input_tokens += input_tokens
         self.output_tokens += output_tokens
+        if estimated:
+            self.estimated_requests += 1
+
+    @property
+    def tokens_are_estimated(self) -> bool:
+        """True when any request's token count came from our own estimate.
+
+        Not every host reports usage. When it does not, spend is a projection at
+        the configured price rather than a measurement, and a report that blurs
+        the two is worse than one that admits the gap.
+        """
+        return self.estimated_requests > 0
 
     def record_cache_hit(self) -> None:
         self.cached_requests += 1
@@ -158,8 +173,9 @@ class Ledger:
         bits = [f"{self.requests} requests"]
         if self.avoided_requests:
             bits.append(f"{self.avoided_requests} avoided")
-        bits.append(f"{self.input_tokens:,} input tokens")
-        bits.append(f"${self.usd:.6f}")
+        suffix = " (estimated)" if self.tokens_are_estimated else ""
+        bits.append(f"{self.input_tokens:,} input tokens{suffix}")
+        bits.append(f"${self.usd:.6f}{suffix}")
         bits.append(f"{self.wall_seconds:.2f}s wall")
         return ", ".join(bits)
 

@@ -124,6 +124,25 @@ def _budget(args: argparse.Namespace) -> Budget:
     return Budget(max_requests=args.max_requests, max_usd=args.max_usd)
 
 
+def _default_model(provider: str | None) -> str | None:
+    """The model id to use when none was given explicitly.
+
+    Naming a provider has to win over the generic ``JEV_XRAY_MODEL`` fallback.
+    Otherwise a Jev version id left in .env gets sent to a gateway whose default
+    model is something else entirely, and the failure looks like a bug in the
+    tool rather than a mismatched model name.
+    """
+    if not provider:
+        return None
+    from .transport.http import resolve_provider
+
+    try:
+        _endpoint, model, _key_env = resolve_provider(provider)
+    except ValueError:
+        return None
+    return model
+
+
 def _run_demo(args: argparse.Namespace) -> int:
     xray = XRay.fake(_DEMO_SIGNALS, bias=_DEMO_BIAS, model="fake-jev-1")
     attribution = xray.explain(
@@ -170,7 +189,9 @@ def _run_explain(args: argparse.Namespace) -> int:
     else:
         try:
             xray = XRay(
-                model=args.model, endpoint=args.endpoint, provider=args.provider
+                model=args.model or _default_model(args.provider),
+                endpoint=args.endpoint,
+                provider=args.provider,
             )
         except ValueError as exc:
             raise SystemExit(
@@ -282,7 +303,7 @@ def build_parser() -> argparse.ArgumentParser:
     explain.add_argument(
         "--provider",
         default="typesafe",
-        help="typesafe (direct) or vercel (AI Gateway); default: typesafe",
+        help="typesafe, vercel, langsmith or local; default: typesafe",
     )
     explain.add_argument(
         "--concurrency", type=int, default=8, help="in-flight ablations (default: 8)"

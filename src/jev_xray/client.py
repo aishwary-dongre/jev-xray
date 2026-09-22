@@ -97,9 +97,11 @@ class Client:
                 future.exception()  # mark retrieved so asyncio stays quiet
 
         parsed = parse_response(request, body)
+        reported = parsed.usage.input_tokens
         ledger.record(
-            input_tokens=parsed.usage.input_tokens or estimated,
+            input_tokens=reported or estimated,
             output_tokens=parsed.usage.output_tokens,
+            estimated=not reported,
         )
         self.cache.put(key, dict(body))
         return parsed

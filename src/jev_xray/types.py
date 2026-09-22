@@ -381,10 +381,25 @@ def parse_response(request: SystemOneRequest, raw: Any) -> SystemOneResponse:
         model=str(raw.get("model") or request.model),
         answers=answers,
         usage=Usage(
-            input_tokens=int(usage_raw.get("input_tokens", 0)),
-            output_tokens=int(usage_raw.get("output_tokens", 0)),
+            input_tokens=_as_token_count(usage_raw.get("input_tokens")),
+            output_tokens=_as_token_count(usage_raw.get("output_tokens")),
         ),
     )
+
+
+def _as_token_count(value: Any) -> int:
+    """Token counts are advisory, so a missing or unusable one is zero.
+
+    Not every host fills them in: some send ``null``, some omit the field. Usage
+    reporting is not worth failing an otherwise valid answer over, and the
+    budget layer already falls back to its own estimate when the count is zero.
+    """
+    if value is None:
+        return 0
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 0
 
 
 # --------------------------------------------------------------------------

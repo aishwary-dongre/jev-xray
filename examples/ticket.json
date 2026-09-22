@@ -1,0 +1,30 @@
+{
+  "_comment": "A deliberately ambiguous ticket. The customer never says 'refund' outright, mentions a policy that would allow one, and hedges in both directions. An easy case would attribute to one obvious sentence; this one shows what the map is actually for.",
+
+  "state": "Order A-104 arrived yesterday and the box was crushed on one corner.\nThe jacket itself looks fine, honestly.\nI've been shopping with you since 2019 and never had a problem before.\nI'm not sure whether to send it back or just keep it at a discount.\nYour policy page says damaged items qualify for a full refund.\nLet me know what my options are.",
+
+  "questions": {
+    "refund_requested": {
+      "type": "noul",
+      "instructions": "The customer is asking for their money back.",
+      "criteria": {
+        "true": "The customer wants a refund, whether stated outright or clearly implied",
+        "false": "The customer wants something else, or has not asked for anything yet"
+      }
+    },
+    "needs_human": {
+      "type": "noul",
+      "instructions": "This message needs a human agent rather than an automated reply."
+    },
+    "resolution": {
+      "type": "choice",
+      "instructions": "What outcome is the customer steering towards?",
+      "criteria": {
+        "refund": "Money returned",
+        "replacement": "A new item sent",
+        "discount": "Keep the item, pay less",
+        "information": "Just wants to know the options"
+      }
+    }
+  }
+}
