@@ -221,8 +221,46 @@ def _diagnostics(attribution: Attribution) -> str:
     )
 
 
-def to_html(attribution: Attribution, *, limit: int = 12, title: str | None = None) -> str:
-    """Render one attribution as a standalone HTML document."""
+_BANNER_CSS = """
+.banner {
+  display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
+  background: #1a1d21; color: #f9fafb; margin: -32px -32px 28px;
+  padding: 14px 32px; font-size: 13px;
+}
+.banner .name { font-weight: 650; letter-spacing: -0.01em; }
+.banner .desc { color: #9aa1aa; }
+.banner .grow { flex: 1; }
+.banner code { background: #2a2e34; padding: 2px 7px; border-radius: 3px;
+               font-size: 12px; }
+.banner a { color: #f9fafb; text-decoration: underline; text-underline-offset: 2px; }
+"""
+
+
+def _banner(repo_url: str) -> str:
+    return (
+        '<div class="banner">'
+        '<span class="name">jev-xray</span>'
+        '<span class="desc">which part of the input caused this decision</span>'
+        '<span class="grow"></span>'
+        "<span><code>jev-xray demo</code></span>"
+        f'<span><a href="{html.escape(repo_url)}">source</a></span>'
+        "</div>"
+    )
+
+
+def to_html(
+    attribution: Attribution,
+    *,
+    limit: int = 12,
+    title: str | None = None,
+    repo_url: str | None = None,
+) -> str:
+    """Render one attribution as a standalone HTML document.
+
+    ``repo_url`` adds a header bar naming the tool that produced the report. Worth
+    setting on anything you hand to someone else, since a heatmap with no
+    provenance invites the reader to trust it further than they should.
+    """
     strongest = max((e.magnitude for e in attribution.effects), default=0.0)
     heading = title or f"Why Jev answered {attribution.baseline_value:.2f}"
 
@@ -282,9 +320,10 @@ def to_html(attribution: Attribution, *, limit: int = 12, title: str | None = No
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(heading)}</title>
-<style>{_CSS}</style></head>
+<style>{_CSS}{_BANNER_CSS if repo_url else ""}</style></head>
 <body><div class="wrap">
 
+{_banner(repo_url) if repo_url else ""}
 <h1>{html.escape(heading)}</h1>
 <div class="sub">
   asked <code>{html.escape(question_text)}</code>

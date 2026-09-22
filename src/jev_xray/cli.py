@@ -107,7 +107,11 @@ def _emit(attribution: Attribution, args: argparse.Namespace) -> None:
         from .report_html import to_html
 
         target = Path(args.html)
-        target.write_text(to_html(attribution), encoding="utf-8")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            to_html(attribution, repo_url=getattr(args, "html_link", None)),
+            encoding="utf-8",
+        )
         print(f"wrote {target}")
         if args.json:
             print(_as_json(attribution))
@@ -272,6 +276,11 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
         "--html",
         metavar="PATH",
         help="write a standalone HTML report instead of printing to the terminal",
+    )
+    parser.add_argument(
+        "--html-link",
+        metavar="URL",
+        help="add a header bar to the HTML report linking back to the source",
     )
 
 
