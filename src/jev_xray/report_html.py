@@ -262,7 +262,11 @@ def to_html(
     provenance invites the reader to trust it further than they should.
     """
     strongest = max((e.magnitude for e in attribution.effects), default=0.0)
-    heading = title or f"Why Jev answered {attribution.baseline_value:.2f}"
+    # Name the model that actually answered. Hardcoding a vendor here would put a
+    # claim in the title that the run may not support.
+    heading = title or (
+        f"Why {attribution.model} answered {attribution.baseline_value:.2f}"
+    )
 
     instructions = attribution.question.instructions
     question_text = instructions if isinstance(instructions, str) else repr(instructions)

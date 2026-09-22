@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Why Jev answered 0.99</title>
+<title>Why semif-qwen3.5-4b answered 0.99</title>
 <style>
 :root {
   --ink: #1a1d21;
@@ -98,7 +98,7 @@ footer code { background: var(--panel); padding: 1px 5px; border-radius: 3px; }
 <body><div class="wrap">
 
 <div class="banner"><span class="name">jev-xray</span><span class="desc">which part of the input caused this decision</span><span class="grow"></span><span><code>jev-xray demo</code></span><span><a href="https://github.com/aishwary-dongre/jev-xray">source</a></span></div>
-<h1>Why Jev answered 0.99</h1>
+<h1>Why semif-qwen3.5-4b answered 0.99</h1>
 <div class="sub">
   asked <code>The customer is asking for their money back.</code>
   &nbsp;&middot;&nbsp; question id <code>refund_requested</code>
@@ -108,17 +108,17 @@ footer code { background: var(--panel); padding: 1px 5px; border-radius: 3px; }
 <div class="headline"><div class="stat"><div class="k">answer</div><div class="v">0.9890</div><div class="k" style="font-weight:400;text-transform:none;letter-spacing:0">P(yes)</div></div><div class="stat"><div class="k">empty state</div><div class="v">0.9627</div><div class="k" style="font-weight:400;text-transform:none;letter-spacing:0">with all evidence removed</div></div><div class="stat"><div class="k">total swing</div><div class="v">+0.0263</div><div class="k" style="font-weight:400;text-transform:none;letter-spacing:0">full minus empty</div></div><div class="stat"><div class="k">segments</div><div class="v">6</div><div class="k" style="font-weight:400;text-transform:none;letter-spacing:0">delete ablation</div></div></div>
 
 <h2>the state, tinted by influence</h2><div class="state"><span class="seg inert" title="no measurable effect">Order A-104 arrived yesterday and the box was crushed on one corner.</span>
-<span class="seg" style="background: rgba(var(--neg), 0.12);" title="sentence 1: removing this moves P(yes) by +0.0034 (to 0.9924)">The jacket itself looks fine, honestly.</span>
-<span class="seg inert" title="no measurable effect">I&#x27;ve been shopping with you since 2019 and never had a problem before.</span>
-<span class="seg" style="background: rgba(var(--neg), 0.13);" title="sentence 3: removing this moves P(yes) by +0.0088 (to 0.9978)">I&#x27;m not sure whether to send it back or just keep it at a discount.</span>
+<span class="seg" style="background: rgba(var(--neg), 0.12);" title="sentence 1: removing this moves P(yes) by +0.0024 (to 0.9914)">The jacket itself looks fine, honestly.</span>
+<span class="seg" style="background: rgba(var(--neg), 0.12);" title="sentence 2: removing this moves P(yes) by +0.0013 (to 0.9903)">I&#x27;ve been shopping with you since 2019 and never had a problem before.</span>
+<span class="seg" style="background: rgba(var(--neg), 0.13);" title="sentence 3: removing this moves P(yes) by +0.0082 (to 0.9972)">I&#x27;m not sure whether to send it back or just keep it at a discount.</span>
 <span class="seg" style="background: rgba(var(--pos), 0.62);" title="sentence 4: removing this moves P(yes) by -0.3666 (to 0.6225)">Your policy page says damaged items qualify for a full refund.</span>
 <span class="seg" style="background: rgba(var(--pos), 0.12);" title="sentence 5: removing this moves P(yes) by -0.0031 (to 0.9859)">Let me know what my options are.</span></div><div class="legend"><span><span class="swatch" style="background:rgba(var(--pos),0.6)"></span>held the answer up</span><span><span class="swatch" style="background:rgba(var(--neg),0.6)"></span>pushed against it</span><span><span class="swatch" style="background:#e5e7eb"></span>no effect</span><span>hover any span for its exact delta</span></div>
 
 <h2>ranked evidence</h2>
-<table class="bars"><tr><td class="lbl">sentence 4</td><td><div class="track"><div class="half left"></div><div class="half right"><div class="bar pos" style="width:100.0%"></div></div></div></td><td class="num">+0.3666</td><td class="txt">Your policy page says damaged items qualify for a full refund.</td></tr><tr><td class="lbl">sentence 3</td><td><div class="track"><div class="half left"><div class="bar neg" style="width:2.4%"></div></div><div class="half right"></div></div></td><td class="num">-0.0088</td><td class="txt">I&#x27;m not sure whether to send it back or just keep it at a disco…</td></tr><tr><td class="lbl">sentence 1</td><td><div class="track"><div class="half left"><div class="bar neg" style="width:0.9%"></div></div><div class="half right"></div></div></td><td class="num">-0.0034</td><td class="txt">The jacket itself looks fine, honestly.</td></tr><tr><td class="lbl">sentence 5</td><td><div class="track"><div class="half left"></div><div class="half right"><div class="bar pos" style="width:0.8%"></div></div></div></td><td class="num">+0.0031</td><td class="txt">Let me know what my options are.</td></tr><tr><td class="lbl">sentence 0</td><td><div class="track"><div class="half left"></div><div class="half right"></div></div></td><td class="num">+0.0000</td><td class="txt">Order A-104 arrived yesterday and the box was crushed on one co…</td></tr><tr><td class="lbl">sentence 2</td><td><div class="track"><div class="half left"></div><div class="half right"></div></div></td><td class="num">+0.0000</td><td class="txt">I&#x27;ve been shopping with you since 2019 and never had a problem …</td></tr></table>
+<table class="bars"><tr><td class="lbl">sentence 4</td><td><div class="track"><div class="half left"></div><div class="half right"><div class="bar pos" style="width:100.0%"></div></div></div></td><td class="num">+0.3666</td><td class="txt">Your policy page says damaged items qualify for a full refund.</td></tr><tr><td class="lbl">sentence 3</td><td><div class="track"><div class="half left"><div class="bar neg" style="width:2.2%"></div></div><div class="half right"></div></div></td><td class="num">-0.0082</td><td class="txt">I&#x27;m not sure whether to send it back or just keep it at a disco…</td></tr><tr><td class="lbl">sentence 5</td><td><div class="track"><div class="half left"></div><div class="half right"><div class="bar pos" style="width:0.8%"></div></div></div></td><td class="num">+0.0031</td><td class="txt">Let me know what my options are.</td></tr><tr><td class="lbl">sentence 1</td><td><div class="track"><div class="half left"><div class="bar neg" style="width:0.7%"></div></div><div class="half right"></div></div></td><td class="num">-0.0024</td><td class="txt">The jacket itself looks fine, honestly.</td></tr><tr><td class="lbl">sentence 2</td><td><div class="track"><div class="half left"><div class="bar neg" style="width:0.3%"></div></div><div class="half right"></div></div></td><td class="num">-0.0013</td><td class="txt">I&#x27;ve been shopping with you since 2019 and never had a problem …</td></tr><tr><td class="lbl">sentence 0</td><td><div class="track"><div class="half left"></div><div class="half right"></div></div></td><td class="num">+0.0000</td><td class="txt">Order A-104 arrived yesterday and the box was crushed on one co…</td></tr></table>
 
 <h2>can you trust this map</h2>
-<div class="note"><p><b>These effects are not additive.</b> They sum to +0.3574 against a total swing of +0.0263, leaving a residual of -0.3311.</p><p>The segments <b>reinforce each other</b>, so each looks pivotal alone and the individual deltas over-count the total.</p><p>The ranking below is still informative, but do not read the magnitudes as additive contributions.</p></div>
+<div class="note"><p><b>These effects are not additive.</b> They sum to +0.3578 against a total swing of +0.0263, leaving a residual of -0.3314.</p><p>The segments <b>reinforce each other</b>, so each looks pivotal alone and the individual deltas over-count the total.</p><p>The ranking below is still informative, but do not read the magnitudes as additive contributions.</p></div>
 
 
 
@@ -131,8 +131,8 @@ footer code { background: var(--panel); padding: 1px 5px; border-radius: 3px; }
   &middot; 1,196 input tokens
   &middot; $0.000050
   &middot; token counts estimated, this host reported none, so spend is a projection at the configured price rather than a measurement
-  &middot; 8.33s
-  &middot; generated 2026-09-22 13:07 UTC
+  &middot; 1.97s
+  &middot; generated 2026-09-22 13:11 UTC
   &middot; <code>jev-xray</code>
 </footer>
 

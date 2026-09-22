@@ -2,6 +2,9 @@
 
 **Decision forensics for System One models.**
 
+**[See a real report →](https://aishwary-dongre.github.io/jev-xray/)** — an actual
+run, not a mockup.
+
 [Jev](https://docs.typesafe.ai/) returns a typed decision with a calibrated
 probability and, by construction, no explanation. There is no text channel for it
 to justify itself through. When an answer is wrong — or right but surprising —
