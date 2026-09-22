@@ -44,31 +44,65 @@ generative models:
   refusal to handle
 - **the probabilities are calibrated** — a 0.15 drop means something
 
-## Try it without an API key
+## What it found on its first real run
+
+Pointed at a support ticket where the customer never says "refund" but does quote
+a refund policy, and asked a 4B hosted decision model whether the customer is
+asking for their money back:
+
+```
+target        P(yes) = 0.9890
+empty state   0.9627 (total swing +0.0263)
+
+segment        delta   ablated   evidence
+sentence 4   +0.3666    0.6225 + Your policy page says damaged items qualify for a full…
+sentence 3   -0.0082    0.9972 - I'm not sure whether to send it back or just keep it at…
+sentence 1   -0.0043    0.9933 - The jacket itself looks fine, honestly.
+```
+
+The model is 98.9% sure. **Delete the entire message and it is still 96.3% sure.**
+The answer barely depends on the input, so no threshold on this question means
+anything — and the answer alone would never have told you that.
+
+The strongest single piece of evidence is the customer *quoting the policy*, not
+asking for anything. Their actual statement of intent moves the answer by −0.008.
+
+Measured on [SemIf](https://github.com/TheoLeeCJ/SemIf), an open reproduction, not
+on Jev. What generalises is the class of bug, not the numbers.
+
+## Try it in two minutes, free, no card
 
 ```bash
 pip install -e ".[dev]"
-jev-xray demo
+jev-xray demo                        # offline, no account at all
 ```
 
-`demo` runs the real code path — segmentation, ablation, concurrent evaluation,
-attribution, budget accounting — against a deterministic fake with *planted*
-evidence. The judgments are fixtures, not predictions. The point is that the
-machinery is verifiable offline, which matters while TypeSafe signups are closed.
+For a real hosted model, LangChain runs [SemIf free through the LLM
+Gateway](https://docs.langchain.com/langsmith/llm-gateway-decision-models). A
+LangSmith API key is all it needs — no provider key, no purchase, no payment
+method:
+
+```bash
+echo 'LANGSMITH_API_KEY=lsv2_pt_...' >> .env
+jev-xray check   --provider langsmith                       # validate the contract
+jev-xray explain examples/ticket.json -q refund_requested \
+                 --provider langsmith --html report.html
+```
 
 ## Access
 
-`jev-xray` speaks `POST /v1/systemone` and nothing else, so anything fronting
-that contract works:
+`jev-xray` speaks `POST /v1/systemone` and nothing else, so anything fronting that
+contract works. Presets:
 
-| Route | Set |
-|---|---|
-| TypeSafe direct | `TYPESAFE_API_KEY` |
-| A gateway reselling Jev | `TYPESAFE_API_KEY` + `JEV_XRAY_BASE_URL` + `JEV_XRAY_MODEL` |
-| A local open reproduction | `JEV_XRAY_BASE_URL=http://localhost:8000/v1/systemone` |
+| `--provider` | Endpoint | Default model | Key |
+|---|---|---|---|
+| `langsmith` | LangSmith LLM Gateway | `semif-qwen3.5-4b` | `LANGSMITH_API_KEY` |
+| `typesafe` | TypeSafe direct | `jev-1.13.0` | `TYPESAFE_API_KEY` |
+| `vercel` | Vercel AI Gateway | `jev-1.13.0` | `AI_GATEWAY_API_KEY` |
+| `local` | `localhost:8000` | — | none |
 
-Copy `.env.example` to `.env`. `.env` is gitignored; the key is read from the
-environment and never written to a config file.
+Anything else: point `--endpoint` at it. Copy `.env.example` to `.env`; `.env` is
+gitignored and keys are only ever read from the environment.
 
 Always pin a version. `jev-latest` and `jev-preview` move when a release ships,
 which silently invalidates any threshold tuned against them — the client warns if
@@ -133,12 +167,26 @@ service reported rather than an estimate.
 
 ## Status
 
-Phase 1: core engine — transport, budget, cache, segmenters, leave-one-out
-attribution, terminal report.
+Working. 150 tests, and validated end to end against a live hosted model.
 
-Next: Shapley sampling with coarse-to-fine drill-down, minimal sufficient and
-flipping sets, then the label-free stability probes (paraphrase spread, option
-order flip rate, negation coherence, distractor drift) and version diffing.
+Six of those tests run against real response bodies published in [Cloudflare's
+model docs](https://developers.cloudflare.com/ai/models/typesafe/jev/), so the
+parser is checked against actual Jev output rather than a reading of the written
+documentation. That is also how three guesses got corrected: a Score `legend`
+arrives as an object keyed by level, `confidence` is present on Choice and Score
+but absent on Noul, and every answer echoes its own `type` — which nothing in the
+prose documentation mentions, and which the parser now cross-checks so it can
+never read a value off the wrong axis.
+
+**Not yet run against hosted Jev itself**, only against SemIf through LangSmith.
+The wire contract is identical and `--provider typesafe` is wired, but nobody has
+pointed it at the real thing yet.
+
+Next: Shapley sampling with coarse-to-fine drill-down, so redundant evidence gets
+credited instead of reported as worthless; minimal sufficient and flipping sets;
+then the label-free stability probes — paraphrase spread, option-order flip rate,
+negation coherence, distractor drift — and version diffing for when `jev-latest`
+moves under you.
 
 ## License
 
