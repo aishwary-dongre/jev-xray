@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import html
 from datetime import datetime, timezone
+from typing import Any
 
 from .attribution import Attribution, SegmentEffect
 
@@ -116,7 +117,7 @@ def _shade(effect: SegmentEffect, strongest: float) -> str:
         return ""
     share = min(1.0, effect.magnitude / strongest)
     alpha = 0.12 + 0.5 * share
-    channel = "--pos" if effect.delta > 0 else "--neg"
+    channel = "--pos" if effect.signed > 0 else "--neg"
     return f"background: rgba(var({channel}), {alpha:.2f});"
 
 
@@ -142,11 +143,18 @@ def _heatmap(attribution: Attribution, strongest: float) -> str:
         elif effect.magnitude < _EPSILON:
             out.append(f'<span class="seg inert" title="no measurable effect">{body}</span>')
         else:
-            tip = (
-                f"{segment.label}: removing this moves "
-                f"{attribution.target.describe()} by {-effect.delta:+.4f} "
-                f"(to {effect.ablated_value:.4f})"
-            )
+            if effect.ablated_value is not None:
+                tip = (
+                    f"{segment.label}: removing this moves "
+                    f"{attribution.target.describe()} by {-effect.signed:+.4f} "
+                    f"(to {effect.ablated_value:.4f})"
+                )
+            else:
+                tip = (
+                    f"{segment.label}: contributes {effect.signed:+.4f} to "
+                    f"{attribution.target.describe()}, averaged over every "
+                    f"combination it appears in"
+                )
             out.append(
                 f'<span class="seg" style="{_shade(effect, strongest)}" '
                 f'title="{html.escape(tip)}">{body}</span>'
@@ -164,7 +172,7 @@ def _bars(attribution: Attribution, strongest: float, limit: int) -> str:
     for effect in attribution.ranked()[:limit]:
         share = 0.0 if strongest <= _EPSILON else min(1.0, effect.magnitude / strongest)
         width = f"{share * 100:.1f}%"
-        positive = effect.delta > 0
+        positive = effect.signed > 0
 
         left = f'<div class="bar neg" style="width:{width}"></div>' if not positive and share else ""
         right = f'<div class="bar pos" style="width:{width}"></div>' if positive and share else ""
@@ -176,7 +184,7 @@ def _bars(attribution: Attribution, strongest: float, limit: int) -> str:
             f'<div class="half left">{left}</div>'
             f'<div class="half right">{right}</div>'
             "</div></td>"
-            f'<td class="num">{effect.delta:+.4f}</td>'
+            f'<td class="num">{effect.signed:+.4f}</td>'
             f'<td class="txt">{html.escape(effect.segment.preview(64))}</td>'
             "</tr>"
         )
@@ -184,6 +192,28 @@ def _bars(attribution: Attribution, strongest: float, limit: int) -> str:
 
 
 def _diagnostics(attribution: Attribution) -> str:
+    if getattr(attribution, "exact", False):
+        return (
+            f'<div class="note ok"><p><b>Exact attribution.</b> Every one of the '
+            f"{attribution.coalitions_evaluated} possible combinations of this "
+            f"evidence was evaluated, so these values are not estimates. They sum "
+            f"to the total swing by construction &mdash; the "
+            f"{attribution.efficiency_gap:+.4f} residual is floating-point error, "
+            f"not uncertainty.</p><p>Interacting and redundant evidence is credited "
+            f"correctly here, which leave-one-out cannot do.</p></div>"
+        )
+
+    if getattr(attribution, "permutations", 0):
+        return (
+            f'<div class="note"><p><b>Sampled attribution.</b> Estimated from '
+            f"{attribution.permutations} random orderings over "
+            f"{attribution.coalitions_evaluated} combinations, because exact "
+            f"enumeration was too expensive. The per-segment error bars show how "
+            f"far from settled each value is; a residual of "
+            f"{attribution.efficiency_gap:+.4f} indicates overall convergence.</p>"
+            f"</div>"
+        )
+
     residual = attribution.interaction_residual
     if residual is None:
         return (
@@ -248,12 +278,64 @@ def _banner(repo_url: str) -> str:
     )
 
 
+def _minimal_blocks(deep: Any) -> str:
+    """The because and the what-would-have-had-to-be-different."""
+    blocks: list[str] = []
+
+    s = deep.sufficient
+    if s.found:
+        blocks.append(
+            "<h2>the smallest evidence that reproduces this answer</h2>"
+            f'<div class="note ok"><p><b>{s.size} of {s.total} segments</b> are '
+            f"enough. On their own they answer {s.value:.4f}, against "
+            f"{s.baseline_value:.4f} for the whole state.</p>"
+            f"<p><em>&ldquo;{html.escape(s.quote())}&rdquo;</em></p></div>"
+        )
+    else:
+        blocks.append(
+            "<h2>the smallest evidence that reproduces this answer</h2>"
+            f'<div class="note"><p>No subset within {s.epsilon:g} of the answer was '
+            f"found. This decision draws on most of the state rather than a "
+            f"quotable part of it.</p></div>"
+        )
+
+    f = deep.flipping
+    if f.found:
+        blocks.append(
+            "<h2>what would have had to be different</h2>"
+            f'<div class="note"><p>Removing <b>{f.size} segment(s)</b> moves the '
+            f"answer to {f.value:.4f}, crossing {f.decision.describe()}.</p>"
+            f"<p><em>&ldquo;{html.escape(f.quote())}&rdquo;</em></p></div>"
+        )
+    else:
+        blocks.append(
+            "<h2>what would have had to be different</h2>"
+            f'<div class="note ok"><p>Nothing found that flips '
+            f"{f.decision.describe()}. The decision is robust to removing "
+            f"evidence.</p></div>"
+        )
+
+    decision = f.decision
+    prior = deep.attribution.unexplained_prior
+    if decision.holds(prior) == decision.holds(deep.baseline_value):
+        blocks.append(
+            '<div class="note"><p><b>This question cannot discriminate.</b> An empty '
+            f"state already answers {prior:.4f}, which falls on the same side of "
+            f"{decision.describe()} as the full state. Most of the answer is a prior "
+            f"the input never moves, so a threshold here will fire on almost "
+            f"anything &mdash; including nothing at all.</p></div>"
+        )
+
+    return "".join(blocks)
+
+
 def to_html(
     attribution: Attribution,
     *,
     limit: int = 12,
     title: str | None = None,
     repo_url: str | None = None,
+    deep: Any | None = None,
 ) -> str:
     """Render one attribution as a standalone HTML document.
 
@@ -341,6 +423,8 @@ def to_html(
 
 <h2>ranked evidence</h2>
 {_bars(attribution, strongest, limit)}
+
+{_minimal_blocks(deep) if deep is not None else ""}
 
 <h2>can you trust this map</h2>
 {_diagnostics(attribution)}

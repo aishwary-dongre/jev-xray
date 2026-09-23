@@ -19,7 +19,7 @@ from typing import Any
 from .attribution import Attribution, leave_one_out
 from .budget import Budget, RateLimiter
 from .cache import MemoryCache, ResponseCache
-from .client import DEFAULT_MODEL, Client
+from .client import DEFAULT_MODEL, Client  # noqa: F401  (Client used in aprobe)
 from .segment import AblationMode, Segmenter
 from .transport.base import Transport
 from .transport.fake import FakeTransport, Signal
@@ -107,24 +107,75 @@ class XRay:
             include_empty=include_empty,
         )
 
-    def explain(self, state: State, question: Question, **kwargs: Any) -> Attribution:
-        """Synchronous :meth:`aexplain`.
+    async def aprobe(
+        self,
+        state: State,
+        question: Question,
+        *,
+        method: str = "deep",
+        **kwargs: Any,
+    ) -> Any:
+        """Run one of the estimators.
 
-        Raises inside a running event loop rather than deadlocking; use
-        ``aexplain`` there.
+        ``loo``
+            Leave-one-out. One request per segment. Cheapest, and blind to
+            evidence that only counts in combination.
+        ``shapley``
+            Average marginal contribution over subsets. Exact when affordable,
+            sampled otherwise. Correct for interacting and redundant evidence.
+        ``deep``
+            Shapley plus the smallest sufficient evidence and the smallest change
+            that flips the decision, all sharing one coalition cache.
         """
+        if method == "loo":
+            return await self.aexplain(state, question, **kwargs)
+
+        client = Client(
+            self._transport,
+            model=self.model,
+            cache=self._cache,
+            limiter=self._limiter,
+        )
+        budget = kwargs.pop("budget", None) or self.budget
+
+        if method == "shapley":
+            from .shapley import shapley
+
+            return await shapley(client, state, question, budget=budget, **kwargs)
+
+        if method == "deep":
+            from .probe import deep_explain
+
+            return await deep_explain(client, state, question, budget=budget, **kwargs)
+
+        raise ValueError(f"unknown method {method!r}; expected loo, shapley or deep")
+
+    def probe(
+        self, state: State, question: Question, *, method: str = "deep", **kwargs: Any
+    ) -> Any:
+        """Synchronous :meth:`aprobe`."""
+        return self._run(self.aprobe(state, question, method=method, **kwargs))
+
+    def explain(self, state: State, question: Question, **kwargs: Any) -> Attribution:
+        """Synchronous :meth:`aexplain`."""
+        return self._run(self.aexplain(state, question, **kwargs))
+
+    def _run(self, coro: Any) -> Any:
+        """Drive a coroutine to completion, refusing to nest inside a live loop."""
         try:
             asyncio.get_running_loop()
         except RuntimeError:
             pass
         else:
+            coro.close()
             raise RuntimeError(
-                "explain() cannot run inside an active event loop; await aexplain() instead"
+                "the synchronous API cannot run inside an active event loop; "
+                "await the async form instead"
             )
 
-        async def run() -> Attribution:
+        async def run() -> Any:
             try:
-                return await self.aexplain(state, question, **kwargs)
+                return await coro
             finally:
                 if self._owns_transport:
                     # HttpTransport rebuilds its connection pool lazily, so

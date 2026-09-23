@@ -22,6 +22,7 @@ from typing import Any, Sequence
 from .attribution import Attribution
 from .budget import Budget
 from .explain import XRay
+from .minimal import Decision
 from .render import report, supports_color
 from .transport.fake import Signal
 from .types import Noul, question_from_wire
@@ -67,11 +68,20 @@ def _load_input(path: Path) -> tuple[Any, dict[str, Any]]:
     return payload["state"], questions
 
 
-def _as_json(attribution: Attribution) -> str:
-    return json.dumps(
-        {
+def _split(result: Any) -> tuple[Any, Any]:
+    """Separate the attribution map from the optional deep-probe extras."""
+    deep = getattr(result, "attribution", None)
+    if deep is not None:
+        return deep, result
+    return result, None
+
+
+def _as_json(result: Any) -> str:
+    attribution, deep = _split(result)
+    payload: dict[str, Any] = {
             "model": attribution.model,
             "question_id": attribution.question_id,
+            "method": "shapley" if hasattr(attribution, "exact") else "loo",
             "target": attribution.target.describe(),
             "baseline": attribution.baseline_value,
             "empty_state": attribution.empty_value,
@@ -82,46 +92,103 @@ def _as_json(attribution: Attribution) -> str:
                     "id": e.segment.id,
                     "label": e.segment.label,
                     "text": e.segment.text,
-                    "delta": e.delta,
+                    "effect": e.signed,
                     "ablated": e.ablated_value,
+                    "std_error": e.std_error,
                 }
                 for e in attribution.ranked()
             ],
-            "failures": [
-                {"label": seg.label, "reason": why} for seg, why in attribution.failures
-            ],
-            "cost": {
-                "requests": attribution.ledger.requests,
-                "cached": attribution.ledger.cached_requests,
-                "input_tokens": attribution.ledger.input_tokens,
-                "usd": attribution.ledger.usd,
-                "wall_seconds": attribution.ledger.wall_seconds,
-            },
+        "failures": len(attribution.failures),
+        "cost": {
+            "requests": attribution.ledger.requests,
+            "avoided": attribution.ledger.avoided_requests,
+            "input_tokens": attribution.ledger.input_tokens,
+            "tokens_estimated": attribution.ledger.tokens_are_estimated,
+            "usd": attribution.ledger.usd,
+            "wall_seconds": attribution.ledger.wall_seconds,
         },
-        indent=2,
-    )
+    }
+
+    if hasattr(attribution, "exact"):
+        payload["shapley"] = {
+            "exact": attribution.exact,
+            "coalitions_evaluated": attribution.coalitions_evaluated,
+            "permutations": attribution.permutations,
+            "efficiency_gap": attribution.efficiency_gap,
+        }
+
+    if deep is not None:
+        payload["sufficient_evidence"] = {
+            "found": deep.sufficient.found,
+            "size": deep.sufficient.size,
+            "of": deep.sufficient.total,
+            "value": deep.sufficient.value,
+            "quote": deep.sufficient.quote(),
+        }
+        payload["counterfactual"] = {
+            "found": deep.flipping.found,
+            "size": deep.flipping.size,
+            "value": deep.flipping.value,
+            "threshold": deep.flipping.decision.threshold,
+            "remove": deep.flipping.quote(),
+        }
+
+    return json.dumps(payload, indent=2)
 
 
-def _emit(attribution: Attribution, args: argparse.Namespace) -> None:
+def _deep_blocks(deep: Any, color: bool) -> str:
+    from .render import _dimmed  # local: rendering helpers are private by design
+
+    parts = ["", _dimmed("smallest evidence that reproduces the answer", color),
+             deep.sufficient.summary()]
+    if deep.sufficient.found:
+        parts.append(f'    "{deep.sufficient.quote()}"')
+
+    parts += ["", _dimmed("smallest change that flips the decision", color),
+              deep.flipping.summary()]
+    if deep.flipping.found:
+        parts.append(f'    remove: "{deep.flipping.quote()}"')
+
+    decision = deep.flipping.decision
+    prior = deep.attribution.unexplained_prior
+    if decision.holds(prior) == decision.holds(deep.baseline_value):
+        parts += [
+            "",
+            _dimmed("warning", color),
+            f"  an empty state already answers {prior:.4f}, the same side of "
+            f"{decision.describe()} as the full state.\n  this question cannot "
+            f"discriminate: the answer is mostly a prior the input never touches.",
+        ]
+    return "\n".join(parts)
+
+
+def _emit(result: Any, args: argparse.Namespace) -> None:
+    attribution, deep = _split(result)
     if getattr(args, "html", None):
         from .report_html import to_html
 
         target = Path(args.html)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(
-            to_html(attribution, repo_url=getattr(args, "html_link", None)),
+            to_html(
+                attribution, repo_url=getattr(args, "html_link", None), deep=deep
+            ),
             encoding="utf-8",
         )
         print(f"wrote {target}")
         if args.json:
-            print(_as_json(attribution))
+            print(_as_json(result))
         return
 
     if args.json:
-        print(_as_json(attribution))
+        print(_as_json(result))
         return
+
     color = False if args.no_color else supports_color()
-    print(report(attribution, color=color))
+    output = report(attribution, color=color)
+    if deep is not None:
+        output += "\n" + _deep_blocks(deep, color)
+    print(output)
 
 
 def _budget(args: argparse.Namespace) -> Budget:
@@ -203,16 +270,25 @@ def _run_explain(args: argparse.Namespace) -> int:
                 "--endpoint at a local open reproduction serving /v1/systemone."
             ) from None
 
-    attribution = xray.explain(
+    extra: dict[str, Any] = {}
+    if args.method == "deep":
+        extra["decision"] = Decision(threshold=args.threshold)
+    if args.method in ("shapley", "deep") and args.samples is not None:
+        extra["samples"] = args.samples
+        extra["exact"] = False
+
+    result = xray.probe(
         state,
         question,
+        method=args.method,
         question_id=qid,
         segmenter=args.segmenter,
         mode=args.mode,
         budget=_budget(args),
         concurrency=args.concurrency,
+        **extra,
     )
-    _emit(attribution, args)
+    _emit(result, args)
     return 0
 
 
@@ -316,6 +392,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     explain.add_argument(
         "--concurrency", type=int, default=8, help="in-flight ablations (default: 8)"
+    )
+    explain.add_argument(
+        "--method",
+        choices=("loo", "shapley", "deep"),
+        default="deep",
+        help=(
+            "loo: one request per segment, cheapest, blind to interaction. "
+            "shapley: average marginal contribution, correct under interaction. "
+            "deep: shapley plus minimal evidence and counterfactual (default)"
+        ),
+    )
+    explain.add_argument(
+        "--samples",
+        type=int,
+        help="force sampled Shapley with this many permutations instead of exact",
+    )
+    explain.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="the decision boundary a counterfactual has to cross (default: 0.5)",
     )
     explain.add_argument(
         "--fake",

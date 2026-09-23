@@ -34,7 +34,8 @@ from .budget import (
     estimate_tokens,
 )
 from .client import Client
-from .segment import AblationMode, DEFAULT_MASK, Segment, Segmenter, auto_segmenter, get_segmenter
+from .coalition import CoalitionEvaluator
+from .segment import AblationMode, Segment, Segmenter, auto_segmenter, get_segmenter
 from .types import Answer, Question, State, SystemOneRequest, Target
 
 __all__ = ["SegmentEffect", "Attribution", "leave_one_out"]
@@ -56,6 +57,16 @@ class SegmentEffect:
     @property
     def magnitude(self) -> float:
         return abs(self.delta)
+
+    @property
+    def signed(self) -> float:
+        """Contribution on a common axis, so renderers work on either estimator."""
+        return self.delta
+
+    @property
+    def std_error(self) -> float | None:
+        """Leave-one-out is deterministic; there is no sampling error to report."""
+        return None
 
 
 @dataclass(slots=True)
@@ -203,25 +214,26 @@ async def leave_one_out(
     planned = len(segments) + 1 + (1 if include_empty else 0)
     _preflight(state, questions, planned, budget, len(segments))
 
-    baseline = await client.ask(state, questions, ledger=ledger, budget=budget)
-    baseline_answer = baseline.answers[question_id]
-    target = target if target is not None else Target.baseline(baseline_answer)
-    baseline_value = target.read(baseline_answer)
+    evaluator = await CoalitionEvaluator.prepare(
+        client,
+        state,
+        question,
+        question_id=question_id,
+        segmenter=chosen,
+        segments=segments,
+        target=target,
+        mode=mode,
+        budget=budget,
+        ledger=ledger,
+        concurrency=concurrency,
+    )
+    baseline_value = evaluator.baseline_value
+    everything = evaluator.everything
 
-    semaphore = asyncio.Semaphore(max(1, concurrency))
-
-    async def evaluate(drop: Sequence[int]) -> float:
-        async with semaphore:
-            ablated = chosen.ablate(state, drop, mode=mode)
-            if isinstance(ablated, str) and not ablated.strip():
-                # An empty state is not a meaningful request and may be rejected
-                # outright; the neutral placeholder keeps the axis comparable.
-                ablated = DEFAULT_MASK
-            response = await client.ask(ablated, questions, ledger=ledger, budget=budget)
-            return target.read(response.answers[question_id])
-
+    # Gathered in segment order rather than over a set, so which segment a
+    # failure belongs to is never ambiguous.
     results = await asyncio.gather(
-        *(evaluate([segment.id]) for segment in segments),
+        *(evaluator.value(everything - {segment.id}) for segment in segments),
         return_exceptions=True,
     )
 
@@ -245,7 +257,7 @@ async def leave_one_out(
     empty_value: float | None = None
     if include_empty:
         try:
-            empty_value = await evaluate([s.id for s in segments])
+            empty_value = await evaluator.value(evaluator.nothing)
         except Exception:  # noqa: BLE001 - a diagnostic reference, never fatal
             empty_value = None
 
@@ -254,12 +266,12 @@ async def leave_one_out(
     return Attribution(
         question_id=question_id,
         question=question,
-        target=target,
+        target=evaluator.target,
         model=client.model,
         mode=mode,
         state=state,
         segments=segments,
-        baseline_answer=baseline_answer,
+        baseline_answer=evaluator.baseline_answer,
         baseline_value=baseline_value,
         effects=effects,
         ledger=ledger,

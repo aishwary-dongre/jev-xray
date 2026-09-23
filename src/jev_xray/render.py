@@ -56,7 +56,7 @@ def _paint(text: str, effect: SegmentEffect, strongest: float, color: bool) -> s
     index = _bin(effect.magnitude, strongest)
     if index < 0:
         return f"{_DIM}{text}{_RESET}"
-    palette = _GREENS if effect.delta > 0 else _REDS
+    palette = _GREENS if effect.signed > 0 else _REDS
     return f"\x1b[48;5;{palette[index]}m{_FG_BLACK}{text}{_RESET}"
 
 
@@ -103,16 +103,23 @@ def table(attribution: Attribution, *, limit: int = 10, color: bool | None = Non
         return "  (no segment effects recorded)"
 
     width = max(len(e.segment.label) for e in rows)
+    second = "ablated" if rows[0].ablated_value is not None else "+/- err"
     lines = [
-        f"  {'segment'.ljust(width)}  {'delta':>8}  {'ablated':>8}   evidence",
+        f"  {'segment'.ljust(width)}  {'effect':>8}  {second:>8}   evidence",
         f"  {'-' * width}  {'-' * 8}  {'-' * 8}   {'-' * 40}",
     ]
     for effect in rows:
-        arrow = "+" if effect.delta > 0 else "-" if effect.delta < 0 else " "
+        arrow = "+" if effect.signed > 0 else "-" if effect.signed < 0 else " "
         marker = _dimmed(arrow, color)
+        if effect.ablated_value is not None:
+            detail = f"{effect.ablated_value:8.4f}"
+        elif effect.std_error is not None:
+            detail = f"{effect.std_error:8.4f}"
+        else:
+            detail = " " * 8
         lines.append(
-            f"  {effect.segment.label.ljust(width)}  {effect.delta:+8.4f}  "
-            f"{effect.ablated_value:8.4f} {marker} {effect.segment.preview(56)}"
+            f"  {effect.segment.label.ljust(width)}  {effect.signed:+8.4f}  "
+            f"{detail} {marker} {effect.segment.preview(56)}"
         )
     return "\n".join(lines)
 
@@ -131,13 +138,15 @@ def report(attribution: Attribution, *, color: bool | None = None, limit: int = 
     ]
 
     residual = attribution.interaction_residual
-    if residual is not None and abs(residual) > 0.05:
+    exact = getattr(attribution, "exact", False)
+    if residual is not None and abs(residual) > 0.05 and not exact:
         blocks += [
             "",
             _dimmed("note", color),
             f"  interaction residual {residual:+.4f}: these segments do not act "
             f"independently,\n  so treat the ranking as indicative and the "
-            f"magnitudes as not additive.",
+            f"magnitudes as not additive.\n  re-run with --method shapley to "
+            f"attribute them properly.",
         ]
 
     if attribution.failures:

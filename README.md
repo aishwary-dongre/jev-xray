@@ -47,28 +47,56 @@ generative models:
   refusal to handle
 - **the probabilities are calibrated** — a 0.15 drop means something
 
-## What it found on its first real run
+## What it found on a real decision
 
-Pointed at a support ticket where the customer never says "refund" but does quote
-a refund policy, and asked a 4B hosted decision model whether the customer is
-asking for their money back:
+A support ticket where the customer never says "refund" but does quote a refund
+policy. Asked a hosted decision model whether she is asking for her money back:
+**0.988**.
+
+Delete the entire message and it still answers **0.963**.
+
+The answer barely depends on the input, so no threshold on that question means
+anything — and `0.988` alone would never have told you. The tool's own verdict:
 
 ```
-target        P(yes) = 0.9890
-empty state   0.9627 (total swing +0.0263)
+smallest evidence that reproduces the answer
+  0 of 6 segment(s) reproduce the answer: 0.9627 against 0.9876
 
-segment        delta   ablated   evidence
-sentence 4   +0.3666    0.6225 + Your policy page says damaged items qualify for a full…
-sentence 3   -0.0082    0.9972 - I'm not sure whether to send it back or just keep it at…
-sentence 1   -0.0043    0.9933 - The jacket itself looks fine, honestly.
+smallest change that flips the decision
+  no subset flips value >= 0.5; the decision is robust to removing evidence
+
+warning
+  an empty state already answers 0.9627, the same side of value >= 0.5 as the
+  full state. this question cannot discriminate.
 ```
 
-The model is 98.9% sure. **Delete the entire message and it is still 96.3% sure.**
-The answer barely depends on the input, so no threshold on this question means
-anything — and the answer alone would never have told you that.
+### Why the estimator matters
 
-The strongest single piece of evidence is the customer *quoting the policy*, not
-asking for anything. Their actual statement of intent moves the answer by −0.008.
+The same question, the same model, both estimators:
+
+| sentence | leave-one-out | Shapley |
+|---|---:|---:|
+| Order A-104 arrived… the box was crushed | −0.0027 | **−0.0992** |
+| The jacket itself looks fine, honestly. | −0.0039 | **−0.1861** |
+| I've been shopping with you since 2019… | −0.0014 | **−0.0556** |
+| I'm not sure whether to send it back… | −0.0100 | **+0.0291** |
+| Your policy page says damaged items qualify… | +0.3949 | +0.4569 |
+| Let me know what my options are. | +0.0000 | **−0.1245** |
+| **sum of effects** | +0.3769 | +0.0207 |
+| **total swing** | +0.0249 | +0.0249 |
+| **unexplained** | −0.3520 | **−0.0000** |
+
+Leave-one-out called five of six sentences inert. Shapley shows they were pushing
+*against* the refund reading all along — one of them by 48× what leave-one-out
+measured.
+
+They were invisible for the same reason the question is broken: the prior is so
+strong that removing any *single* sentence leaves the answer pinned near the
+ceiling. Only contexts where several are already gone let it move. Note also that
+leave-one-out's deltas sum to 15× the swing the state actually produces, while
+Shapley's sum to it exactly.
+
+64 requests, 8 seconds, a third of a thousandth of a dollar.
 
 Measured on [SemIf](https://github.com/TheoLeeCJ/SemIf), an open reproduction, not
 on Jev. What generalises is the class of bug, not the numbers.
@@ -79,6 +107,17 @@ on Jev. What generalises is the class of bug, not the numbers.
 pip install -e ".[dev]"
 jev-xray demo                        # offline, no account at all
 ```
+
+Three estimators, selected with `--method`:
+
+| | what it does | cost |
+|---|---|---|
+| `loo` | removes one segment at a time | n + 2 requests |
+| `shapley` | average contribution over subsets; correct under interaction | 2ⁿ exact, or samples × (n+1) |
+| `deep` | Shapley plus minimal evidence and counterfactual (**default**) | same as Shapley |
+
+`deep` is the default because the extra two searches are usually free: exact
+Shapley has already evaluated every subset they need.
 
 For a real hosted model, LangChain runs [SemIf free through the LLM
 Gateway](https://docs.langchain.com/langsmith/llm-gateway-decision-models). A
@@ -129,18 +168,43 @@ holding the answer up.
 
 **Report** as a terminal heatmap over the original wording, plus a ranked table.
 
-### Reading the interaction residual
+### Why leave-one-out is not enough
 
-Leave-one-out is the cheap estimator and it has a known blind spot: it cannot see
-evidence that only counts jointly, and it reads *redundant* evidence as worthless
-because removing either copy leaves the other carrying the decision.
+Removing one segment at a time is cheap and has two blind spots:
 
-`Attribution.interaction_residual` is the total swing between the full and empty
-state minus the sum of the individual effects. Near zero means the segments act
-independently and leave-one-out is an adequate account. Large means it is not:
-the ranking is still informative but the magnitudes are not additive, and a
-Shapley-style estimator over random subsets is the honest next step. The tool
-tells you which situation you are in rather than letting you assume.
+- **redundant evidence** — the same signal appears twice, so removing either copy
+  leaves the other carrying the decision and both measure as worthless
+- **complementary evidence** — two segments matter only together, so each looks
+  individually decisive and their deltas sum to twice the real effect
+
+Both are measurable. `interaction_residual` is the total swing minus the sum of
+the individual effects. Near zero means the segments act independently. Far from
+zero means they do not, and the magnitudes cannot be trusted.
+
+Shapley fixes it by averaging each segment's contribution over every context it
+could appear in. That is the only attribution satisfying **efficiency** — the
+values sum exactly to the full-state answer minus the empty-state answer — so the
+residual becomes zero by construction and turns into a check on the arithmetic
+rather than a caveat on the result.
+
+The cost is subsets: 2ⁿ of them, which is 64 requests for six segments. Exact when
+that fits the budget, permutation sampling with reported standard errors when it
+does not, and the report always says which it used.
+
+### The two smallest answers
+
+An attribution map is the right output for diagnosing a *question*. It is the
+wrong one for explaining a *decision* — nobody wants six numbers, they want the
+sentence that did it. So `deep` also searches for:
+
+- **minimal sufficient evidence** — the smallest set of segments that reproduces
+  the answer on its own. A quotable *because*.
+- **minimal flipping set** — the smallest removal that changes the decision. The
+  counterfactual, which is what an auditor or a customer actually asks for.
+
+A sufficient set of **size zero** is the most important result either can return:
+it means the empty state already produces the answer, so the question does not
+need its input at all.
 
 ## Budgets are mandatory
 
@@ -170,7 +234,7 @@ service reported rather than an estimate.
 
 ## Status
 
-Working. 150 tests, and validated end to end against a live hosted model.
+Working. 203 tests, and validated end to end against a live hosted model.
 
 Six of those tests run against real response bodies published in [Cloudflare's
 model docs](https://developers.cloudflare.com/ai/models/typesafe/jev/), so the
@@ -185,11 +249,11 @@ never read a value off the wrong axis.
 The wire contract is identical and `--provider typesafe` is wired, but nobody has
 pointed it at the real thing yet.
 
-Next: Shapley sampling with coarse-to-fine drill-down, so redundant evidence gets
-credited instead of reported as worthless; minimal sufficient and flipping sets;
-then the label-free stability probes — paraphrase spread, option-order flip rate,
-negation coherence, distractor drift — and version diffing for when `jev-latest`
-moves under you.
+Next: the label-free stability probes — paraphrase spread, option-order flip rate,
+negation coherence, distractor drift — which measure whether a question is stable
+enough to hang a threshold on at all. Then coarse-to-fine drill-down so Shapley
+scales past a dozen segments, and version diffing for when `jev-latest` moves
+under you.
 
 ## License
 
