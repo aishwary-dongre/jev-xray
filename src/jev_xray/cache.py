@@ -26,9 +26,19 @@ CacheKey = str
 
 
 def cache_key(request: SystemOneRequest) -> CacheKey:
-    """Stable hash of everything that can affect the answer."""
+    """Hash of the exact bytes that will be sent.
+
+    Deliberately **not** key-sorted. Sorting looks like the right way to make the
+    key robust to irrelevant dictionary ordering, and it is wrong here: JSON
+    object order is transmitted, so the order you list a Choice's options in is
+    part of the request. The option-order probe varies exactly that, and a sorted
+    key would serve every permutation from cache and report perfect stability no
+    matter how order-sensitive the model actually is.
+
+    Two requests share an answer only when they are byte-identical.
+    """
     canonical = json.dumps(
-        request.wire(), sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str
+        request.wire(), separators=(",", ":"), ensure_ascii=False, default=str
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 

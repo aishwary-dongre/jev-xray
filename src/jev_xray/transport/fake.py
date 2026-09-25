@@ -46,15 +46,29 @@ class Signal:
         index as a string. For a Noul, ``"true"`` (the default) or ``"false"``.
     ``question_id``
         Restrict the signal to one question. ``None`` applies it to all of them.
+    ``scope``
+        Where the pattern is searched. ``state`` is the default and the usual
+        case. ``question`` searches the serialised question instead, which is how
+        a fixture can be made sensitive to *how the question is worded* — the
+        thing the paraphrase and negation probes exist to detect. ``both``
+        searches the two concatenated.
     """
 
     pattern: str
     weight: float = 1.0
     label: str | None = None
     question_id: str | None = None
+    scope: str = "state"
 
     def matches(self, text: str) -> bool:
         return re.search(self.pattern, text, re.IGNORECASE) is not None
+
+    def haystack(self, state_text: str, question_text: str) -> str:
+        if self.scope == "question":
+            return question_text
+        if self.scope == "both":
+            return f"{state_text}\n{question_text}"
+        return state_text
 
 
 @dataclass(slots=True)
@@ -66,6 +80,10 @@ class FakeTransport:
     latency: float = 0.0
     fail_first: int = 0
     model: str | None = None
+    # Position bias: a bonus to whichever option happens to be listed first.
+    # Real models exhibit this, and a fixture that does not cannot demonstrate
+    # that the option-order probe works.
+    first_option_bonus: float = 0.0
 
     calls: int = field(default=0, init=False)
     seen_states: list[str] = field(default_factory=list, init=False)
@@ -88,11 +106,15 @@ class FakeTransport:
         self.calls += 1
         self.seen_states.append(text)
 
-        active = [s for s in self.signals if s.matches(text)]
-
         answers: dict[str, Any] = {}
         for qid, question in request.questions.items():
-            relevant = [s for s in active if s.question_id in (None, qid)]
+            question_text = _flatten(question.wire())
+            relevant = [
+                s
+                for s in self.signals
+                if s.question_id in (None, qid)
+                and s.matches(s.haystack(text, question_text))
+            ]
             answers[qid] = self._answer(question, relevant)
 
         return {
@@ -119,6 +141,8 @@ class FakeTransport:
             raise TypeError(f"unsupported question type {type(question).__name__}")
 
         logits = {label: self.bias for label in labels}
+        if self.first_option_bonus and labels:
+            logits[labels[0]] += self.first_option_bonus
         for s in signals:
             target = s.label if s.label in logits else labels[0]
             logits[target] += s.weight

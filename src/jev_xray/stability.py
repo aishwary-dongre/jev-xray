@@ -25,8 +25,8 @@ starting point for judgement, not a standard.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, field
-from typing import Awaitable, Callable, Literal, Sequence
+from dataclasses import dataclass, field, replace
+from typing import Awaitable, Callable, Literal, Mapping, Sequence
 
 from .budget import Budget, BudgetExceeded, Ledger
 from .client import Client
@@ -40,7 +40,7 @@ from .segment import (
     get_segmenter,
     reassemble,
 )
-from .types import Answer, Question, State, Target
+from .types import Answer, Choice, Noul, Question, State, Target
 
 __all__ = [
     "Verdict",
@@ -50,6 +50,12 @@ __all__ = [
     "prior_saturation",
     "distractor_drift",
     "order_sensitivity",
+    "option_order_flip",
+    "negation_coherence",
+    "paraphrase_spread",
+    "framings",
+    "build_context",
+    "run_probes",
 ]
 
 Verdict = Literal["ok", "warn", "fail"]
@@ -419,3 +425,286 @@ async def run_probes(
                 )
             )
     return results
+
+
+# --------------------------------------------------------------------------
+# question-level probes: is the question itself doing the work?
+# --------------------------------------------------------------------------
+
+
+async def option_order_flip(ctx: ProbeContext, *, shuffles: int = 4) -> ProbeResult:
+    """Does a Choice depend on the order you listed the options in?
+
+    The options are a set, not a sequence. Listing them differently is not new
+    information, so it should not change the answer. Independent work on open
+    reproductions of this interface found option-order sensitivity to be real, and
+    it is invisible from any single answer.
+
+    Measures two things, because they fail differently: whether the *selected
+    option* ever changes, and how far the tracked probability moves. A selection
+    flip is the serious one — it means the decision your code branches on depends
+    on dictionary ordering.
+
+    fail
+        the selected option changes under any permutation
+    warn
+        the selection holds but the probability spreads by more than 0.05
+    """
+    ctx.mark()
+    question = ctx.question
+    criteria = getattr(question, "criteria", None)
+    if not isinstance(question, Choice) or not isinstance(criteria, Mapping):
+        return ProbeResult(
+            name="option order flip",
+            verdict="ok",
+            detail="",
+            skipped_reason="only applies to a Choice question",
+            requests=0,
+        )
+
+    options = list(criteria)
+    if len(options) < 3:
+        return ProbeResult(
+            name="option order flip",
+            verdict="ok",
+            detail="",
+            skipped_reason="needs at least three options to permute meaningfully",
+            requests=0,
+        )
+
+    rng = ctx.rng(salt=31)
+    baseline_choice = getattr(ctx.baseline_answer, "choice", None)
+
+    values = [ctx.baseline_value]
+    choices = {baseline_choice}
+    seen = {tuple(options)}
+
+    for _ in range(shuffles):
+        order = list(options)
+        for _attempt in range(8):
+            rng.shuffle(order)
+            if tuple(order) not in seen:
+                break
+        seen.add(tuple(order))
+
+        permuted = Choice(
+            instructions=question.instructions,
+            criteria={key: criteria[key] for key in order},
+        )
+        response = await ctx.client.ask(
+            ctx.state,
+            {ctx.question_id: permuted},
+            ledger=ctx.ledger,
+            budget=ctx.budget,
+        )
+        answer = response.answers[ctx.question_id]
+        values.append(ctx.target.read(answer))
+        choices.add(answer.choice)
+
+    spread = max(values) - min(values)
+    flipped = len(choices) > 1
+
+    if flipped:
+        verdict: Verdict = "fail"
+        detail = (
+            f"across {len(values)} orderings of the same options the selection "
+            f"changed: {sorted(c for c in choices if c)}. the option your code "
+            f"branches on depends on the order you listed them in"
+        )
+    elif spread > 0.05:
+        verdict = "warn"
+        detail = (
+            f"the selection held at {baseline_choice!r} across {len(values)} "
+            f"orderings, but its probability spread by {spread:.4f}. any threshold "
+            f"tighter than that is measuring ordering"
+        )
+    else:
+        verdict = "ok"
+        detail = (
+            f"the selection held at {baseline_choice!r} across {len(values)} "
+            f"orderings, with a probability spread of {spread:.4f}"
+        )
+
+    return ProbeResult(
+        name="option order flip",
+        verdict=verdict,
+        detail=detail,
+        measurement=spread,
+        requests=ctx.spent(),
+    )
+
+
+async def negation_coherence(ctx: ProbeContext) -> ProbeResult:
+    """Is the model reading your criteria, or only your instruction?
+
+    For a Noul, swap the descriptions of ``true`` and ``false`` while leaving the
+    instruction untouched. Nothing about the world changed; the meaning of "yes"
+    did. A model that reads the criteria should return roughly ``1 - p``.
+
+    So ``p + p_swapped`` should land near 1.0. Near 2.0 or near 0.0 means the
+    criteria were ignored and the answer came from the instruction text alone —
+    in which case every boundary case you carefully wrote into the criteria is
+    doing nothing.
+
+    TypeSafe's own notes warn that a Noul whose true maps to "no" performs worse,
+    and separately that a question and its negation are not guaranteed to sum to
+    1. This measures how far from that ideal your specific question sits.
+
+    fail
+        the sum is more than 0.35 away from 1.0
+    warn
+        more than 0.15 away
+    """
+    ctx.mark()
+    question = ctx.question
+    if not isinstance(question, Noul):
+        return ProbeResult(
+            name="negation coherence",
+            verdict="ok",
+            detail="",
+            skipped_reason="only applies to a Noul question",
+            requests=0,
+        )
+
+    criteria = question.criteria
+    if not criteria or "true" not in criteria or "false" not in criteria:
+        return ProbeResult(
+            name="negation coherence",
+            verdict="ok",
+            detail="",
+            skipped_reason="needs explicit true and false criteria to swap",
+            requests=0,
+        )
+
+    swapped = Noul(
+        instructions=question.instructions,
+        criteria={**criteria, "true": criteria["false"], "false": criteria["true"]},
+    )
+    inverted = await ctx.ask(question=swapped)
+
+    total = ctx.baseline_value + inverted
+    error = abs(total - 1.0)
+
+    if error > 0.35:
+        verdict: Verdict = "fail"
+        detail = (
+            f"p={ctx.baseline_value:.4f} and p={inverted:.4f} with the criteria "
+            f"swapped, summing to {total:.4f} instead of 1.0. the criteria are "
+            f"being ignored: the answer comes from the instruction text alone, so "
+            f"the boundary cases you wrote into them are doing nothing"
+        )
+    elif error > 0.15:
+        verdict = "warn"
+        detail = (
+            f"p={ctx.baseline_value:.4f} and p={inverted:.4f} swapped sum to "
+            f"{total:.4f}. the criteria are read, but loosely"
+        )
+    else:
+        verdict = "ok"
+        detail = (
+            f"p={ctx.baseline_value:.4f} and p={inverted:.4f} swapped sum to "
+            f"{total:.4f}, close to the 1.0 a coherent reading implies"
+        )
+
+    return ProbeResult(
+        name="negation coherence",
+        verdict=verdict,
+        detail=detail,
+        measurement=total - 1.0,
+        requests=ctx.spent(),
+    )
+
+
+def framings(instructions: str) -> list[str]:
+    """Mechanical rewordings that do not change what is being asked.
+
+    Deliberately conservative and deterministic. This package cannot generate
+    text — the whole point of the model it debugs is that it does not — so these
+    are wrappers rather than genuine paraphrases. They catch gross framing
+    sensitivity, not subtle synonym effects.
+
+    For real paraphrases, pass your own to :func:`paraphrase_spread`. Rewordings
+    from a generative model are fine and arguably better; they just have to come
+    from outside.
+    """
+    stripped = instructions.strip()
+    body = stripped.rstrip(".")
+    return [
+        f"Based only on the text provided: {body}.",
+        f"{body}. Answer using only what is stated above.",
+        f"Consider the text and decide: {body}.",
+    ]
+
+
+async def paraphrase_spread(
+    ctx: ProbeContext,
+    *,
+    paraphrases: Sequence[str] | None = None,
+) -> ProbeResult:
+    """Does rewording the question change the answer?
+
+    If it does, the number you are thresholding on partly measures your phrasing
+    rather than the input. That is the failure mode behind TypeSafe's first
+    documented weakness — the model answers the question you wrote, not the one
+    you meant — and a single answer cannot reveal it.
+
+    Uses :func:`framings` when no paraphrases are supplied, which only catches
+    gross sensitivity. Supply your own for a real test.
+
+    fail
+        the spread across rewordings exceeds 0.15
+    warn
+        exceeds 0.08
+    """
+    ctx.mark()
+    instructions = ctx.question.instructions
+    if not isinstance(instructions, str):
+        return ProbeResult(
+            name="paraphrase spread",
+            verdict="ok",
+            detail="",
+            skipped_reason="structured instructions; supply paraphrases explicitly",
+            requests=0,
+        )
+
+    variants = list(paraphrases) if paraphrases else framings(instructions)
+    if not variants:
+        return ProbeResult(
+            name="paraphrase spread",
+            verdict="ok",
+            detail="",
+            skipped_reason="no paraphrases supplied",
+            requests=0,
+        )
+
+    values = [ctx.baseline_value]
+    for variant in variants:
+        reworded = replace(ctx.question, instructions=variant)
+        values.append(await ctx.ask(question=reworded))
+
+    spread = max(values) - min(values)
+    supplied = bool(paraphrases)
+
+    if spread > 0.15:
+        verdict: Verdict = "fail"
+    elif spread > 0.08:
+        verdict = "warn"
+    else:
+        verdict = "ok"
+
+    detail = (
+        f"across {len(values)} wordings of the same question the answer ranged "
+        f"{min(values):.4f} to {max(values):.4f}, a spread of {spread:.4f}"
+    )
+    if not supplied:
+        detail += " (mechanical framings only; supply real paraphrases for a stronger test)"
+    if verdict != "ok":
+        detail += "; any threshold tighter than this spread is measuring your phrasing"
+
+    return ProbeResult(
+        name="paraphrase spread",
+        verdict=verdict,
+        detail=detail,
+        measurement=spread,
+        requests=ctx.spent(),
+    )
