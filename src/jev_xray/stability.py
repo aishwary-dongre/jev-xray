@@ -56,6 +56,9 @@ __all__ = [
     "framings",
     "build_context",
     "run_probes",
+    "StabilityReport",
+    "stability",
+    "DEFAULT_PROBES",
 ]
 
 Verdict = Literal["ok", "warn", "fail"]
@@ -71,6 +74,15 @@ class ProbeResult:
     measurement: float | None = None
     requests: int = 0
     skipped_reason: str | None = None
+    noise: bool = False
+    """Whether this probe's measurement belongs in the noise band.
+
+    True for probes that perturb something which *should not* matter, so the
+    movement they observe is measurement noise. False for probes measuring signal
+    (how much range the input has) or a different quantity entirely (whether the
+    criteria are read at all), neither of which can be compared in the same
+    units.
+    """
 
     @property
     def skipped(self) -> bool:
@@ -266,6 +278,7 @@ async def distractor_drift(
         detail=detail,
         measurement=worst,
         requests=ctx.spent(),
+        noise=True,
     )
 
 
@@ -340,6 +353,7 @@ async def order_sensitivity(ctx: ProbeContext, *, shuffles: int = 4) -> ProbeRes
         detail=detail,
         measurement=spread,
         requests=ctx.spent(),
+        noise=True,
     )
 
 
@@ -408,7 +422,7 @@ async def run_probes(
         except BudgetExceeded as exc:
             results.append(
                 ProbeResult(
-                    name=getattr(probe, "__name__", "probe"),
+                    name=_probe_name(probe),
                     verdict="warn",
                     detail="",
                     skipped_reason=f"budget exhausted: {exc}",
@@ -418,13 +432,19 @@ async def run_probes(
         except Exception as exc:  # noqa: BLE001 - one probe failing is not fatal
             results.append(
                 ProbeResult(
-                    name=getattr(probe, "__name__", "probe"),
+                    name=_probe_name(probe),
                     verdict="warn",
                     detail="",
                     skipped_reason=f"{type(exc).__name__}: {exc}",
                 )
             )
     return results
+
+
+def _probe_name(probe: Probe) -> str:
+    """Readable name for a probe, including one wrapped in functools.partial."""
+    inner = getattr(probe, "func", probe)
+    return getattr(inner, "__name__", "probe").replace("_", " ")
 
 
 # --------------------------------------------------------------------------
@@ -531,6 +551,7 @@ async def option_order_flip(ctx: ProbeContext, *, shuffles: int = 4) -> ProbeRes
         detail=detail,
         measurement=spread,
         requests=ctx.spent(),
+        noise=True,
     )
 
 
@@ -707,4 +728,226 @@ async def paraphrase_spread(
         detail=detail,
         measurement=spread,
         requests=ctx.spent(),
+        noise=True,
+    )
+
+
+# --------------------------------------------------------------------------
+# the verdict
+# --------------------------------------------------------------------------
+
+DEFAULT_PROBES: tuple[Probe, ...] = (
+    prior_saturation,
+    distractor_drift,
+    order_sensitivity,
+    option_order_flip,
+    negation_coherence,
+    paraphrase_spread,
+)
+
+
+@dataclass(slots=True)
+class StabilityReport:
+    """Every probe's result, plus the one number that matters.
+
+    The individual probes are diagnostics. The question a developer actually has
+    is narrower: *can I put a threshold on this and have it mean something?* That
+    reduces to comparing two quantities the probes have already measured.
+
+    **Usable range** is how far the answer moves between an empty state and the
+    real one. That is the signal: all the room the input has to work in.
+
+    **Noise band** is the largest movement produced by a perturbation that should
+    not have moved it at all — filler text, reordered evidence, reshuffled
+    options, reworded question.
+
+    If the noise band is as wide as the usable range, the question measures its
+    own phrasing and packaging as much as it measures the input, and no threshold
+    on it is defensible. If a specific answer sits within a noise band of the
+    threshold, that particular decision could have gone either way for reasons
+    having nothing to do with the customer.
+    """
+
+    question_id: str
+    question: Question
+    model: str
+    target: Target
+    baseline_value: float
+    decision: Decision
+    results: list[ProbeResult]
+    ledger: Ledger
+
+    # -- aggregates ---------------------------------------------------------
+
+    @property
+    def ran(self) -> list[ProbeResult]:
+        return [r for r in self.results if not r.skipped]
+
+    @property
+    def worst_verdict(self) -> Verdict:
+        order = {"ok": 0, "warn": 1, "fail": 2}
+        worst: Verdict = "ok"
+        for result in self.ran:
+            if order[result.verdict] > order[worst]:
+                worst = result.verdict
+        return worst
+
+    @property
+    def noise_band(self) -> float | None:
+        """Largest movement from a perturbation that should have moved nothing."""
+        measured = [
+            abs(r.measurement)
+            for r in self.ran
+            if r.noise and r.measurement is not None
+        ]
+        return max(measured) if measured else None
+
+    @property
+    def usable_range(self) -> float | None:
+        """How much room the input has: the empty-to-full swing."""
+        for result in self.ran:
+            if result.name == "prior saturation" and result.measurement is not None:
+                return abs(result.measurement)
+        return None
+
+    @property
+    def signal_to_noise(self) -> float | None:
+        band, span = self.noise_band, self.usable_range
+        if band is None or span is None:
+            return None
+        if band == 0.0:
+            return float("inf")
+        return span / band
+
+    @property
+    def margin(self) -> float:
+        """Distance from this answer to the decision boundary."""
+        return abs(self.baseline_value - self.decision.threshold)
+
+    def threshold_is_meaningful(self) -> bool | None:
+        """Whether a threshold on this question can be defended.
+
+        ``None`` when the probes needed to decide did not run.
+        """
+        band = self.noise_band
+        span = self.usable_range
+        if band is None or span is None:
+            return None
+        # Two conditions, and both have to hold: the input must have more room to
+        # move the answer than noise does, and this particular answer must sit
+        # clear of the boundary by more than the noise band.
+        return band < span and band < self.margin
+
+    # -- rendering ----------------------------------------------------------
+
+    def verdict_line(self) -> str:
+        band, span = self.noise_band, self.usable_range
+        if band is None or span is None:
+            return "  verdict unavailable: the probes needed to decide did not run"
+
+        ratio = self.signal_to_noise
+        ratio_text = "infinite" if ratio == float("inf") else f"{ratio:.1f}x"
+
+        if span <= band:
+            return (
+                f"  NOT USABLE. the input moves this answer by {span:.4f}, while "
+                f"perturbations\n  that should change nothing move it by "
+                f"{band:.4f}. the question measures its own\n  packaging at least "
+                f"as much as it measures the input"
+            )
+        if self.margin < band:
+            return (
+                f"  THIS DECISION IS NOT SAFE. the answer sits {self.margin:.4f} "
+                f"from the\n  {self.decision.describe()} boundary, inside a noise "
+                f"band of {band:.4f}. it could have\n  gone either way for reasons "
+                f"unrelated to the input. signal-to-noise {ratio_text}"
+            )
+        return (
+            f"  usable. signal-to-noise {ratio_text}: the input moves the answer "
+            f"{span:.4f},\n  noise moves it {band:.4f}, and this answer sits "
+            f"{self.margin:.4f} clear of the boundary"
+        )
+
+    def summary(self) -> str:
+        lines = [
+            f"question {self.question_id!r} on {self.model}  [stability]",
+            f"  target        {self.target.describe()} = {self.baseline_value:.4f}",
+            f"  boundary      {self.decision.describe()}",
+            f"  probes        {len(self.ran)} ran, "
+            f"{len(self.results) - len(self.ran)} skipped, worst: {self.worst_verdict}",
+            f"  spent         {self.ledger.summary()}",
+            "",
+            "probes",
+        ]
+        lines += [r.line() for r in self.results]
+        lines += ["", "verdict", self.verdict_line()]
+        return "\n".join(lines)
+
+
+async def stability(
+    client: Client,
+    state: State,
+    question: Question,
+    *,
+    question_id: str = "q",
+    segmenter: str | Segmenter = "auto",
+    target: Target | None = None,
+    mode: AblationMode = "delete",
+    budget: Budget | None = None,
+    decision: Decision | None = None,
+    paraphrases: Sequence[str] | None = None,
+    shuffles: int = 4,
+    probes: Sequence[Probe] | None = None,
+    concurrency: int = 8,
+    seed: int = 0,
+    ledger: Ledger | None = None,
+) -> StabilityReport:
+    """Run the stability suite against one question.
+
+    Costs roughly 12 requests for a Noul and 14 for a Choice, so it is cheaper
+    than a single exact Shapley run over six segments. Worth doing once per
+    question when you write it, and again in CI when the model version moves.
+    """
+    ledger = ledger if ledger is not None else Ledger()
+    ctx = await build_context(
+        client,
+        state,
+        question,
+        question_id=question_id,
+        segmenter=segmenter,
+        target=target,
+        mode=mode,
+        budget=budget,
+        decision=decision,
+        concurrency=concurrency,
+        seed=seed,
+        ledger=ledger,
+    )
+
+    if probes is None:
+        from functools import partial
+
+        chosen: tuple[Probe, ...] = (
+            prior_saturation,
+            distractor_drift,
+            partial(order_sensitivity, shuffles=shuffles),
+            partial(option_order_flip, shuffles=shuffles),
+            negation_coherence,
+            partial(paraphrase_spread, paraphrases=paraphrases),
+        )
+    else:
+        chosen = tuple(probes)
+
+    results = await run_probes(ctx, chosen)
+    ledger.finish()
+
+    return StabilityReport(
+        question_id=question_id,
+        question=question,
+        model=client.model,
+        target=ctx.target,
+        baseline_value=ctx.baseline_value,
+        decision=ctx.decision,
+        results=results,
+        ledger=ledger,
     )
