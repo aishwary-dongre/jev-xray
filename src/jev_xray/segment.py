@@ -41,6 +41,8 @@ __all__ = [
     "JsonFieldSegmenter",
     "DEFAULT_MASK",
     "get_segmenter",
+    "auto_segmenter",
+    "reassemble",
 ]
 
 AblationMode = Literal["delete", "mask"]
@@ -93,6 +95,11 @@ class _SpanSegmenter:
     """Shared machinery for segmenters over a text state."""
 
     kind = "span"
+
+    # How reassembled segments are joined when a probe reorders them. Sentences
+    # run together on one line; lines and turns need their newline back or the
+    # state changes shape as well as order, which would confound the measurement.
+    joiner = " "
 
     def __init__(self, *, mask: str = DEFAULT_MASK) -> None:
         self.mask = mask
@@ -174,6 +181,7 @@ class LineSegmenter(_SpanSegmenter):
     """One segment per non-blank line. The right default for logs, diffs and code."""
 
     kind = "line"
+    joiner = "\n"
 
     def _spans(self, text: str) -> list[tuple[int, int]]:
         spans: list[tuple[int, int]] = []
@@ -196,6 +204,7 @@ class TurnSegmenter(_SpanSegmenter):
     """
 
     kind = "turn"
+    joiner = "\n"
 
     _SPEAKER = re.compile(r"^[ \t]*([A-Za-z][\w .'\-]{0,38}):[ \t]", re.MULTILINE)
 
@@ -388,6 +397,32 @@ def auto_segmenter(state: State, **kwargs: Any) -> Segmenter:
     if len(lines) >= 3 and sum(len(line) for line in lines) / len(lines) < 80:
         return LineSegmenter(**kwargs)
     return SentenceSegmenter(**kwargs)
+
+
+def reassemble(
+    segmenter: Segmenter, segments: Sequence[Segment], order: Sequence[int]
+) -> State:
+    """Rebuild a text state with its segments in a different order.
+
+    Used by the ordering probe: if the same evidence in a different sequence
+    produces a different answer, position is acting as evidence, which it should
+    not be.
+
+    Structured states have no linear order to permute, so they are not supported.
+    """
+    joiner = getattr(segmenter, "joiner", None)
+    if joiner is None:
+        raise TypeError(
+            f"{type(segmenter).__name__} has no linear ordering to permute; "
+            "reordering only applies to text states"
+        )
+
+    by_id = {segment.id: segment for segment in segments}
+    missing = [i for i in order if i not in by_id]
+    if missing:
+        raise KeyError(f"no such segment ids: {missing}")
+
+    return joiner.join(by_id[i].text.strip() for i in order)
 
 
 def _require_text(state: State, kind: str) -> str:
