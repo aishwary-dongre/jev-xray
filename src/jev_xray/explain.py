@@ -156,6 +156,30 @@ class XRay:
         """Synchronous :meth:`aprobe`."""
         return self._run(self.aprobe(state, question, method=method, **kwargs))
 
+    async def astability(
+        self, state: State, question: Question, **kwargs: Any
+    ) -> Any:
+        """Run the stability suite: is this question safe to threshold on?
+
+        Distinct from attribution. Attribution explains one answer; this asks
+        whether the question itself is sound, by perturbing things that should not
+        change the answer and measuring whether they did.
+        """
+        from .stability import stability as _stability
+
+        client = Client(
+            self._transport,
+            model=self.model,
+            cache=self._cache,
+            limiter=self._limiter,
+        )
+        budget = kwargs.pop("budget", None) or self.budget
+        return await _stability(client, state, question, budget=budget, **kwargs)
+
+    def stability(self, state: State, question: Question, **kwargs: Any) -> Any:
+        """Synchronous :meth:`astability`."""
+        return self._run(self.astability(state, question, **kwargs))
+
     def explain(self, state: State, question: Question, **kwargs: Any) -> Attribution:
         """Synchronous :meth:`aexplain`."""
         return self._run(self.aexplain(state, question, **kwargs))

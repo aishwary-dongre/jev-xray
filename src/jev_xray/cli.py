@@ -327,6 +327,107 @@ def _run_check(args: argparse.Namespace) -> int:
     return 0 if result.ok else 1
 
 
+def _run_stability(args: argparse.Namespace) -> int:
+    state, raw_questions = _load_input(Path(args.input))
+    qid, question = _pick_question(args, raw_questions)
+
+    if args.fake:
+        xray = XRay.fake(model=args.model or "fake-jev-1")
+    else:
+        try:
+            xray = XRay(
+                model=args.model or _default_model(args.provider),
+                endpoint=args.endpoint,
+                provider=args.provider,
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from None
+
+    paraphrases = None
+    if args.paraphrase:
+        paraphrases = list(args.paraphrase)
+
+    report_obj = xray.stability(
+        state,
+        question,
+        question_id=qid,
+        segmenter=args.segmenter,
+        budget=Budget(max_requests=args.max_requests, max_usd=args.max_usd),
+        decision=Decision(threshold=args.threshold),
+        paraphrases=paraphrases,
+        shuffles=args.shuffles,
+    )
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "model": report_obj.model,
+                    "question_id": report_obj.question_id,
+                    "baseline": report_obj.baseline_value,
+                    "threshold": report_obj.decision.threshold,
+                    "usable_range": report_obj.usable_range,
+                    "noise_band": report_obj.noise_band,
+                    "signal_to_noise": (
+                        None
+                        if report_obj.signal_to_noise in (None, float("inf"))
+                        else report_obj.signal_to_noise
+                    ),
+                    "margin": report_obj.margin,
+                    "threshold_is_meaningful": report_obj.threshold_is_meaningful(),
+                    "worst_verdict": report_obj.worst_verdict,
+                    "probes": [
+                        {
+                            "name": r.name,
+                            "verdict": None if r.skipped else r.verdict,
+                            "measurement": r.measurement,
+                            "detail": r.detail,
+                            "skipped": r.skipped_reason,
+                            "requests": r.requests,
+                        }
+                        for r in report_obj.results
+                    ],
+                    "cost": {
+                        "requests": report_obj.ledger.requests,
+                        "usd": report_obj.ledger.usd,
+                        "estimated": report_obj.ledger.tokens_are_estimated,
+                    },
+                },
+                indent=2,
+            )
+        )
+    else:
+        print(report_obj.summary())
+
+    # Non-zero when the question is not safe to threshold on, so this can gate a
+    # build. A question that regresses under a new model version should fail CI
+    # the same way a broken test does.
+    meaningful = report_obj.threshold_is_meaningful()
+    if meaningful is False or report_obj.worst_verdict == "fail":
+        return 1
+    return 0
+
+
+def _pick_question(args: argparse.Namespace, raw_questions: dict) -> tuple[str, Any]:
+    qid = args.question
+    if qid is None:
+        if len(raw_questions) > 1:
+            raise SystemExit(
+                f"{args.input} defines {len(raw_questions)} questions; choose one "
+                f"with -q, from: {', '.join(sorted(raw_questions))}"
+            )
+        qid = next(iter(raw_questions))
+    elif qid not in raw_questions:
+        raise SystemExit(
+            f"no question {qid!r} in {args.input}; "
+            f"available: {', '.join(sorted(raw_questions))}"
+        )
+    try:
+        return qid, question_from_wire(raw_questions[qid])
+    except ValueError as exc:
+        raise SystemExit(f"question {qid!r} is not valid: {exc}") from None
+
+
 def _add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--mode",
@@ -434,6 +535,51 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--model", help="model id to send")
     check.add_argument("--endpoint", help="override the System One endpoint URL")
     check.set_defaults(func=_run_check)
+
+    stab = subparsers.add_parser(
+        "stability",
+        help="is this question safe to put a threshold on? exits 1 if not",
+    )
+    stab.add_argument("input", help="JSON file with 'state' and 'questions'")
+    stab.add_argument("-q", "--question", help="which question id to probe")
+    stab.add_argument("--segmenter", default="auto", help="segmenter (default: auto)")
+    stab.add_argument("--model", help="model id; pin a version, not an alias")
+    stab.add_argument("--endpoint", help="override the System One endpoint URL")
+    stab.add_argument(
+        "--provider",
+        default="typesafe",
+        help="typesafe, vercel, langsmith or local; default: typesafe",
+    )
+    stab.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="the decision boundary your code acts on (default: 0.5)",
+    )
+    stab.add_argument(
+        "--shuffles",
+        type=int,
+        default=4,
+        help="permutations per ordering probe (default: 4)",
+    )
+    stab.add_argument(
+        "--paraphrase",
+        action="append",
+        metavar="TEXT",
+        help="a real rewording of the question; repeatable. "
+        "without it, only mechanical framings are tried",
+    )
+    stab.add_argument(
+        "--fake", action="store_true", help="use the deterministic fake"
+    )
+    stab.add_argument(
+        "--max-requests", type=int, default=200, help="request ceiling (default: 200)"
+    )
+    stab.add_argument(
+        "--max-usd", type=float, default=0.05, help="spend ceiling (default: 0.05)"
+    )
+    stab.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    stab.set_defaults(func=_run_stability)
 
     return parser
 
