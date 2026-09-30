@@ -221,3 +221,69 @@ class TestSegmentPresentation:
         assert text_segment.label == "sentence 0"
         field_segment = JsonFieldSegmenter().split({"a": {"b": "value"}})[0]
         assert field_segment.label == "a.b"
+
+
+class TestEmptyContainerPruning:
+    """Deleting the last leaf under a key should not leave the key behind.
+
+    ``"customer": {}`` is an artifact of how the removal was done, not content the
+    model was ever meant to read, and it still costs tokens. It also made the
+    dead-weight output look wrong: pruning six of eight fields and reporting the
+    state as 47% smaller, while the JSON still carried empty husks.
+    """
+
+    STATE = {
+        "ticket": {"body": "I was billed twice."},
+        "customer": {"tier": "gold"},
+        "notes": ["only note"],
+        "policy": "Duplicates are refundable.",
+    }
+
+    def _drop(self, paths, **kwargs):
+        segmenter = JsonFieldSegmenter(**kwargs)
+        ids = {s.path: s.id for s in segmenter.split(self.STATE)}
+        return segmenter.ablate(self.STATE, [ids[p] for p in paths])
+
+    def test_an_emptied_object_is_removed(self):
+        result = self._drop(["customer.tier"])
+        assert "customer" not in result
+
+    def test_an_emptied_array_is_removed(self):
+        result = self._drop(["notes.0"])
+        assert "notes" not in result
+
+    def test_surviving_content_is_untouched(self):
+        result = self._drop(["customer.tier", "notes.0"])
+        assert result["ticket"]["body"] == "I was billed twice."
+        assert result["policy"] == "Duplicates are refundable."
+
+    def test_nesting_is_pruned_bottom_up(self):
+        state = {"a": {"b": {"c": "only leaf"}}, "keep": "yes"}
+        segmenter = JsonFieldSegmenter()
+        target = next(s for s in segmenter.split(state) if s.path == "a.b.c")
+        result = segmenter.ablate(state, [target.id])
+        # a.b emptied, so a empties, so a goes.
+        assert result == {"keep": "yes"}
+
+    def test_pruning_can_be_turned_off(self):
+        result = self._drop(["customer.tier"], prune_empty=False)
+        assert result["customer"] == {}
+
+    def test_mask_mode_never_prunes(self):
+        segmenter = JsonFieldSegmenter()
+        ids = {s.path: s.id for s in segmenter.split(self.STATE)}
+        result = segmenter.ablate(self.STATE, [ids["customer.tier"]], mode="mask")
+        assert result["customer"]["tier"] == DEFAULT_MASK
+
+    def test_scalars_and_empty_strings_survive(self):
+        # Only containers emptied by our own edit are artifacts. An empty string
+        # the caller supplied is content, however uninformative.
+        state = {"blank": "", "count": 0, "body": "text here", "nothing": None}
+        segmenter = JsonFieldSegmenter()
+        target = next(s for s in segmenter.split(state) if s.path == "body")
+        result = segmenter.ablate(state, [target.id])
+        assert result == {"blank": "", "count": 0, "nothing": None}
+
+    def test_the_original_state_is_still_not_mutated(self):
+        self._drop(["customer.tier"])
+        assert self.STATE["customer"] == {"tier": "gold"}

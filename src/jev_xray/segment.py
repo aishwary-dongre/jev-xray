@@ -245,10 +245,12 @@ class JsonFieldSegmenter:
         mask: str = DEFAULT_MASK,
         include_scalars: bool = False,
         min_length: int = 1,
+        prune_empty: bool = True,
     ) -> None:
         self.mask = mask
         self.include_scalars = include_scalars
         self.min_length = min_length
+        self.prune_empty = prune_empty
 
     def _leaves(self, node: Any, prefix: str = "") -> list[tuple[str, Any]]:
         if isinstance(node, Mapping):
@@ -307,7 +309,43 @@ class JsonFieldSegmenter:
         )
         for path in targets:
             _edit_path(out, path, mask=self.mask if mode == "mask" else None)
+
+        if mode == "delete" and self.prune_empty:
+            # Removing the only leaf under a key leaves `"customer": {}` behind.
+            # That is an artifact of how the removal was done, not content the
+            # model was ever meant to read, and it still costs tokens. "delete"
+            # should mean gone.
+            out = _drop_empty_containers(out)
         return out
+
+
+def _drop_empty_containers(node: Any) -> Any:
+    """Recursively remove containers left empty by a deletion.
+
+    Bottom-up, so a branch that becomes empty only because its children were
+    pruned is removed too. Scalars, empty strings and ``None`` are left alone:
+    they are content, however uninformative, and only containers emptied by our
+    own edit are artifacts.
+    """
+    if isinstance(node, Mapping):
+        cleaned = {}
+        for key, value in node.items():
+            pruned = _drop_empty_containers(value)
+            if isinstance(pruned, (Mapping, list)) and len(pruned) == 0:
+                continue
+            cleaned[key] = pruned
+        return cleaned
+
+    if isinstance(node, list):
+        cleaned_list = []
+        for value in node:
+            pruned = _drop_empty_containers(value)
+            if isinstance(pruned, (Mapping, list)) and len(pruned) == 0:
+                continue
+            cleaned_list.append(pruned)
+        return cleaned_list
+
+    return node
 
 
 def _edit_path(root: Any, path: str, *, mask: str | None) -> None:
