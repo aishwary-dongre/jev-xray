@@ -1,0 +1,93 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: python -m pip install --upgrade pip && pip install -e ".[dev]"
+
+      - name: Test
+        # Every test runs against the deterministic fake, so the suite needs no
+        # API key and makes no network calls. If that ever stops being true this
+        # job is where it will show up.
+        run: python -m pytest -q
+
+  smoke:
+    # The first thing anyone does with this repo is run the demo. If that breaks,
+    # the tests passing is not much comfort.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install
+        run: python -m pip install --upgrade pip && pip install -e ".[dev]"
+
+      - name: Offline demo runs
+        run: jev-xray demo --no-color
+
+      - name: Injection scenario runs and flags the planted attack
+        run: |
+          jev-xray demo --scenario injection --json > injection.json
+          python - <<'PY'
+          import json, sys
+          report = json.load(open("injection.json"))
+          top = report["segments"][0]
+          assert top["label"] == "user_message", f"expected the injected field on top, got {top['label']}"
+          assert top["effect"] > 0, "the injection should push toward 'safe'"
+          print(f"ok: {top['label']} at {top['effect']:+.4f}")
+          PY
+
+      - name: Every estimator runs
+        run: |
+          for method in loo shapley deep; do
+            echo "--- $method ---"
+            jev-xray explain examples/ticket.json -q refund_requested \
+              --fake --segmenter sentence --method "$method" --no-color > /dev/null
+          done
+
+      - name: Stability suite runs and reports a verdict
+        # Exits 1 on an unusable question, which the signal-free fake is by
+        # construction, so the exit code is expected rather than a failure.
+        run: |
+          jev-xray stability examples/ticket.json -q refund_requested \
+            --fake --segmenter sentence || true
+
+      - name: HTML report is generated and carries no scripts
+        run: |
+          jev-xray demo --html report.html
+          test -s report.html
+          if grep -qi "<script" report.html; then
+            echo "the report must stay script-free: it is opened from untrusted runs"
+            exit 1
+          fi

@@ -1,5 +1,7 @@
 # jev-xray
 
+[![tests](https://github.com/aishwary-dongre/jev-xray/actions/workflows/tests.yml/badge.svg)](https://github.com/aishwary-dongre/jev-xray/actions/workflows/tests.yml)
+
 **Decision forensics for System One models.**
 
 **[See a real report →](https://aishwary-dongre.github.io/jev-xray/)** — an actual
