@@ -83,6 +83,23 @@ jobs:
           jev-xray stability examples/ticket.json -q refund_requested \
             --fake --segmenter sentence || true
 
+      - name: Version diff runs over a corpus
+        # The fake answers the same regardless of the model name, so this
+        # exercises the plumbing and the report shape rather than a real flip.
+        # Flips are covered by unit tests with two differently configured fakes.
+        run: |
+          jev-xray diff examples/corpus.json --fake \
+            --baseline fake-v1 --candidate fake-v2 --json > diff.json
+          python - <<'PY'
+          import json
+          report = json.load(open("diff.json"))
+          assert report["states"] == 8, report["states"]
+          assert len(report["questions"]) == 3
+          # Two requests per state, regardless of the question count.
+          assert report["cost"]["requests"] == 16, report["cost"]["requests"]
+          print("ok: 8 states, 3 questions, 16 requests")
+          PY
+
       - name: HTML report is generated and carries no scripts
         run: |
           jev-xray demo --html report.html

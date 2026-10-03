@@ -1,0 +1,39 @@
+{
+  "_comment": "A small corpus for version diffing. 'state' is an array, so every entry is replayed against both model versions and the questions are asked once per state. Run with: jev-xray diff examples/corpus.json --baseline jev-1.13.0 --candidate jev-latest --provider langsmith",
+
+  "state": [
+    "I would like my money back for order A-104, the jacket arrived torn.",
+    "Just checking where my order is, no rush.",
+    "The box arrived crushed. Please refund the duplicate charge.",
+    "Can you tell me what your return window is?",
+    "This is the third time I have written. I want this escalated today.",
+    "Thanks, the replacement arrived and it is perfect.",
+    "I was billed twice. Your policy page says damaged items qualify for a refund.",
+    "Please cancel the order before it ships."
+  ],
+
+  "questions": {
+    "refund_requested": {
+      "type": "noul",
+      "instructions": "The customer is asking for their money back.",
+      "criteria": {
+        "true": "The customer wants a refund, stated or clearly implied",
+        "false": "The customer wants something else, or has not asked for anything"
+      }
+    },
+    "needs_human": {
+      "type": "noul",
+      "instructions": "This message needs a human agent rather than an automated reply."
+    },
+    "department": {
+      "type": "choice",
+      "instructions": "Which team should handle this message?",
+      "criteria": {
+        "billing": "Charges, refunds and invoices",
+        "logistics": "Shipping, delivery and returns",
+        "support": "Product questions and faults",
+        "other": "Anything the options above do not cover"
+      }
+    }
+  }
+}

@@ -238,6 +238,50 @@ jev-xray explain state.json -q safe_to_execute \
   --untrusted 'user_message' --untrusted 'messages.*'
 ```
 
+### When the model version moves under you
+
+TypeSafe ships `jev-latest` and `jev-preview` as moving aliases, and says plainly
+that a threshold tuned against one version should be pinned because the answers
+behind an alias can change with no change on your side. That is a warning with no
+tool attached: nothing tells you *which* of your decisions changed.
+
+```bash
+jev-xray diff examples/corpus.json \
+  --baseline jev-1.13.0 --candidate jev-latest --provider langsmith
+```
+
+```
+jev-1.13.0  ->  jev-latest
+  states        8
+  questions     3
+
+per question
+  XX  refund_requested
+      2/8 decisions flipped, shift mean -0.1140, worst 0.3800
+      widest flip at state 6: 0.7100 -> 0.3300
+  ok  needs_human
+      0/8 decisions flipped, shift mean +0.0090, worst 0.0210
+
+verdict
+  DO NOT MIGRATE BLIND. 2 decision(s) changed side across 8 state(s),
+  affecting: refund_requested. these are behaviour changes, not drift
+```
+
+Two things are reported because they mean different things. A **flip** is a
+decision that changed side — a refund that would now be declined, an action that
+would now be allowed. A **shift** is a probability that moved. One flip deserves
+more attention than a large average shift that crosses nothing, and a shift wider
+than your margin means the threshold is no longer the one you tuned even where
+nothing has flipped yet.
+
+Needs no labels: it is a comparison, not an evaluation. It cannot tell you which
+version is *right*, only what is different, which is usually the question you
+actually have when a provider moves a pointer. Exits non-zero on any flip, so a
+version bump can gate a deploy.
+
+Costs two requests per state no matter how many questions you ask, because every
+question for one state goes in a single call.
+
 ### The two smallest answers
 
 An attribution map is the right output for diagnosing a *question*. It is the
@@ -281,8 +325,9 @@ service reported rather than an estimate.
 
 ## Status
 
-Working. 299 tests. Attribution is validated end to end against a live hosted
-model; the stability probes and injection locator are tested offline only so far.
+Working. 329 tests. Attribution is validated end to end against a live hosted
+model; the stability probes, injection locator and version diff are tested offline
+only so far.
 
 Six of those tests run against real response bodies published in [Cloudflare's
 model docs](https://developers.cloudflare.com/ai/models/typesafe/jev/), so the

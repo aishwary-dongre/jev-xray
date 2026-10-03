@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from .attribution import Attribution
-from .budget import Budget
+from .budget import Budget, RateLimiter
+from .cache import MemoryCache
 from .explain import XRay
 from .minimal import Decision
 from .render import report, supports_color
@@ -484,6 +485,96 @@ def _run_stability(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_diff(args: argparse.Namespace) -> int:
+    import asyncio
+
+    from .client import Client
+    from .diff import version_diff
+    from .transport.http import HttpTransport
+
+    payload_state, raw_questions = _load_input(Path(args.input))
+    states = payload_state if isinstance(payload_state, list) else [payload_state]
+
+    try:
+        questions = {
+            qid: question_from_wire(body) for qid, body in raw_questions.items()
+        }
+    except ValueError as exc:
+        raise SystemExit(f"invalid question: {exc}") from None
+
+    if args.fake:
+        from .transport.fake import FakeTransport
+
+        transport: Any = FakeTransport()
+    else:
+        try:
+            transport = HttpTransport(endpoint=args.endpoint, provider=args.provider)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from None
+
+    # One cache is safe to share: the model id is part of every key, so a
+    # candidate request can never be served a baseline answer.
+    cache = MemoryCache()
+    limiter = RateLimiter()
+    budget = Budget(max_requests=args.max_requests, max_usd=args.max_usd)
+
+    async def run():
+        try:
+            return await version_diff(
+                Client(transport, model=args.baseline, cache=cache, limiter=limiter),
+                Client(transport, model=args.candidate, cache=cache, limiter=limiter),
+                states,
+                questions,
+                decision=Decision(threshold=args.threshold),
+                budget=budget,
+            )
+        finally:
+            await transport.aclose()
+
+    result = asyncio.run(run())
+
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "baseline_model": result.baseline_model,
+                    "candidate_model": result.candidate_model,
+                    "states": result.states,
+                    "threshold": result.decision.threshold,
+                    "total_flips": result.total_flips,
+                    "safe_to_migrate": result.safe_to_migrate,
+                    "worst_verdict": result.worst_verdict,
+                    "questions": [
+                        {
+                            "question_id": d.question_id,
+                            "samples": d.samples,
+                            "flips": d.flips,
+                            "flip_rate": d.flip_rate,
+                            "mean_shift": d.mean_shift,
+                            "mean_abs_shift": d.mean_abs_shift,
+                            "max_abs_shift": d.max_abs_shift,
+                            "verdict": d.verdict,
+                            "errors": d.errors,
+                        }
+                        for d in result.drifts
+                    ],
+                    "cost": {
+                        "requests": result.ledger.requests,
+                        "usd": result.ledger.usd,
+                        "estimated": result.ledger.tokens_are_estimated,
+                    },
+                },
+                indent=2,
+            )
+        )
+    else:
+        print(result.summary())
+
+    # Non-zero when a decision changed side, so a version bump can gate a deploy
+    # the same way a failing test does.
+    return 0 if result.safe_to_migrate else 1
+
+
 def _pick_question(args: argparse.Namespace, raw_questions: dict) -> tuple[str, Any]:
     qid = args.question
     if qid is None:
@@ -692,6 +783,46 @@ def build_parser() -> argparse.ArgumentParser:
     )
     stab.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     stab.set_defaults(func=_run_stability)
+
+    diff = subparsers.add_parser(
+        "diff",
+        help="replay states against two model versions; exits 1 if any decision flipped",
+    )
+    diff.add_argument(
+        "input",
+        help="JSON file with 'questions' and either 'state' or a 'state' array",
+    )
+    diff.add_argument(
+        "--baseline",
+        default="jev-1.13.0",
+        help="the version you tuned against (default: jev-1.13.0)",
+    )
+    diff.add_argument(
+        "--candidate",
+        default="jev-latest",
+        help="the version you are considering (default: jev-latest)",
+    )
+    diff.add_argument("--endpoint", help="override the System One endpoint URL")
+    diff.add_argument(
+        "--provider",
+        default="typesafe",
+        help="typesafe, vercel, langsmith or local; default: typesafe",
+    )
+    diff.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="the decision boundary your code acts on (default: 0.5)",
+    )
+    diff.add_argument("--fake", action="store_true", help="use the deterministic fake")
+    diff.add_argument(
+        "--max-requests", type=int, default=400, help="request ceiling (default: 400)"
+    )
+    diff.add_argument(
+        "--max-usd", type=float, default=0.05, help="spend ceiling (default: 0.05)"
+    )
+    diff.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    diff.set_defaults(func=_run_diff)
 
     return parser
 
