@@ -325,7 +325,7 @@ service reported rather than an estimate.
 
 ## Status
 
-Working. 329 tests. Attribution is validated end to end against a live hosted
+Working. 341 tests. Attribution is validated end to end against a live hosted
 model; the stability probes, injection locator and version diff are tested offline
 only so far.
 

@@ -287,3 +287,91 @@ class TestEmptyContainerPruning:
     def test_the_original_state_is_still_not_mutated(self):
         self._drop(["customer.tier"])
         assert self.STATE["customer"] == {"tier": "gold"}
+
+
+class TestAbbreviationGuard:
+    """A stop does not always end a sentence.
+
+    Splitting on one that does not produces a fragment, and a fragment is worse
+    than a coarse segment: it attributes a score to text nobody wrote as a unit,
+    and the quote in a minimal-evidence result reads as nonsense. The guard only
+    removes candidate boundaries, so the failure mode is a segment that is too
+    big rather than one that is meaningless.
+    """
+
+    def _texts(self, text, **kwargs):
+        return [s.text for s in SentenceSegmenter(**kwargs).split(text)]
+
+    def test_a_title_does_not_end_a_sentence(self):
+        assert self._texts("Dr. Patel approved the refund. Then it shipped.") == [
+            "Dr. Patel approved the refund.",
+            "Then it shipped.",
+        ]
+
+    def test_a_company_suffix_does_not_end_a_sentence(self):
+        assert self._texts("Paid to Acme Inc. on the 3rd. It cleared.") == [
+            "Paid to Acme Inc. on the 3rd.",
+            "It cleared.",
+        ]
+
+    def test_latin_abbreviations_survive(self):
+        assert self._texts("Damaged items, e.g. torn seams, qualify. Ask us.") == [
+            "Damaged items, e.g. torn seams, qualify.",
+            "Ask us.",
+        ]
+
+    def test_an_initial_does_not_end_a_sentence(self):
+        assert self._texts("Handled by J. Smith yesterday. Closed now.") == [
+            "Handled by J. Smith yesterday.",
+            "Closed now.",
+        ]
+
+    def test_a_numbered_reference_does_not_end_a_sentence(self):
+        assert self._texts("See clause no. 4 of the policy. It applies here.") == [
+            "See clause no. 4 of the policy.",
+            "It applies here.",
+        ]
+
+    def test_etc_does_not_end_a_sentence(self):
+        assert self._texts("Torn seams, broken zips, etc. all qualify. Ask us.") == [
+            "Torn seams, broken zips, etc. all qualify.",
+            "Ask us.",
+        ]
+
+    def test_question_and_exclamation_marks_always_split(self):
+        # Only a full stop can abbreviate.
+        assert self._texts("Is Dr. Patel there? Yes! He is.") == [
+            "Is Dr. Patel there?",
+            "Yes!",
+            "He is.",
+        ]
+
+    def test_ordinary_sentences_still_split(self):
+        assert self._texts("One thing happened. Then another. Then a third.") == [
+            "One thing happened.",
+            "Then another.",
+            "Then a third.",
+        ]
+
+    def test_a_sentence_ending_in_a_quoted_stop_still_splits(self):
+        assert self._texts('He said "fine." Then he left.') == [
+            'He said "fine."',
+            "Then he left.",
+        ]
+
+    def test_the_guard_can_be_disabled(self):
+        unguarded = self._texts(
+            "Dr. Patel approved it. Done.", guard_abbreviations=False
+        )
+        assert unguarded[0] == "Dr."
+
+    def test_spans_still_index_back_into_the_original(self):
+        text = "Dr. Patel approved the refund. Then it shipped."
+        for segment in SentenceSegmenter().split(text):
+            assert text[segment.start : segment.end] == segment.text
+
+    def test_ablation_still_works_across_a_guarded_boundary(self):
+        text = "Dr. Patel approved the refund. Then it shipped."
+        segmenter = SentenceSegmenter()
+        result = segmenter.ablate(text, [0])
+        assert result.strip() == "Then it shipped."

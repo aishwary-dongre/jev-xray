@@ -147,28 +147,95 @@ class _SpanSegmenter:
         return out
 
 
+# Tokens that end in a full stop without ending a sentence. Splitting after one
+# of these produces a fragment, and a fragment is worse than a coarse segment:
+# ablating "Dr" on its own measures nothing anybody wrote.
+_ABBREVIATIONS = frozenset(
+    """
+    mr mrs ms mx dr prof sr jr st rev hon capt sgt lt col gen
+    inc ltd llc llp co corp dept est fig no vs etc al
+    jan feb mar apr jun jul aug sept sep oct nov dec
+    mon tue tues wed thu thur thurs fri sat sun
+    approx avg max min dept ref acct amt apt
+    """.split()
+)
+
+# "e.g." and "i.e." end in a stop after a single letter, which the initials rule
+# below would also catch, but naming them is clearer than relying on that.
+_DOTTED = frozenset({"e.g", "i.e", "a.m", "p.m", "u.s", "u.k"})
+
+
 class SentenceSegmenter(_SpanSegmenter):
     """Split prose into sentences.
 
-    A regex, not a parser. It breaks after ``.``, ``!`` or ``?`` followed by
-    whitespace, and at blank lines. Known limitation: abbreviations, decimals
-    and ellipses can produce a spurious break. Where that matters, pass an
-    explicit ``pattern`` or use :class:`LineSegmenter` over pre-split text.
+    A regex with a guard, not a parser. It breaks after ``.``, ``!`` or ``?``
+    followed by whitespace, and at blank lines, except where the stop belongs to
+    something other than the end of a sentence:
+
+    * a known abbreviation — ``Dr.``, ``Inc.``, ``etc.``, ``e.g.``
+    * an initial — the ``J.`` in ``J. Smith``
+    * a number — the stop in ``No. 5``
+
+    The guard only ever *removes* a candidate boundary, so a false negative
+    yields a coarser segment rather than a fragment. That is the right way round:
+    a fragment attributes a score to text nobody wrote as a unit.
+
+    Still not a parser. Pass an explicit ``pattern`` or use
+    :class:`LineSegmenter` over pre-split text where correctness matters more
+    than convenience.
     """
 
     kind = "sentence"
 
-    _BOUNDARY = re.compile(r"(?<=[.!?])[\"')\]]*\s+|\n{2,}")
+    # The closing punctuation is captured rather than consumed. Left in the
+    # separator it was silently dropped from the segment, so `He said "fine."`
+    # became `He said "fine.` — which corrupts both the quoted evidence in a
+    # minimal-evidence result and the text restored when that segment is kept.
+    _BOUNDARY = re.compile(r"(?<=[.!?])(?P<close>[\"')\]]*)\s+|\n{2,}")
+    _TRAILING_WORD = re.compile(r"([A-Za-z][A-Za-z.]*)\.[\"')\]]*$")
 
-    def __init__(self, *, mask: str = DEFAULT_MASK, pattern: re.Pattern[str] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        mask: str = DEFAULT_MASK,
+        pattern: re.Pattern[str] | None = None,
+        guard_abbreviations: bool = True,
+    ) -> None:
         super().__init__(mask=mask)
         self._boundary = pattern or self._BOUNDARY
+        self._guard = guard_abbreviations
+
+    def _is_boundary(self, text: str, position: int) -> bool:
+        """Whether the stop ending at ``position`` really ends a sentence."""
+        if not self._guard:
+            return True
+
+        head = text[:position]
+        if not head.endswith((".", '."', ".'", ".)", ".]")):
+            return True  # ! or ? never abbreviate
+
+        match = self._TRAILING_WORD.search(head)
+        if match is None:
+            # No word before the stop, so there is no abbreviation to protect.
+            # Decimals need no special case: "3.5" has no whitespace after the
+            # stop, so the boundary pattern never proposes it in the first place.
+            return True
+
+        word = match.group(1)
+        if len(word) == 1 and word.isupper():
+            return False  # an initial, as in "J. Smith"
+        lowered = word.lower().rstrip(".")
+        return lowered not in _ABBREVIATIONS and lowered not in _DOTTED
 
     def _spans(self, text: str) -> list[tuple[int, int]]:
+        has_close = "close" in self._boundary.groupindex
         spans: list[tuple[int, int]] = []
         cursor = 0
         for match in self._boundary.finditer(text):
-            end = match.start()
+            closers = (match.group("close") or "") if has_close else ""
+            end = match.start() + len(closers)
+            if not self._is_boundary(text, end):
+                continue
             if text[cursor:end].strip():
                 spans.append((cursor, end))
             cursor = match.end()
