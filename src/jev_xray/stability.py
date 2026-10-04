@@ -824,6 +824,20 @@ class StabilityReport:
         """Distance from this answer to the decision boundary."""
         return abs(self.baseline_value - self.decision.threshold)
 
+    @property
+    def input_can_decide(self) -> bool:
+        """Whether the input is able to change the outcome at all.
+
+        Separate from the noise comparison, and it has to be. A perfectly stable
+        model answering the same way for every input has a noise band of zero,
+        which makes every ratio look excellent while the question decides nothing.
+        Stability is necessary and not sufficient.
+        """
+        for result in self.ran:
+            if result.name == "prior saturation":
+                return result.verdict != "fail"
+        return True
+
     def threshold_is_meaningful(self) -> bool | None:
         """Whether a threshold on this question can be defended.
 
@@ -833,9 +847,11 @@ class StabilityReport:
         span = self.usable_range
         if band is None or span is None:
             return None
-        # Two conditions, and both have to hold: the input must have more room to
-        # move the answer than noise does, and this particular answer must sit
-        # clear of the boundary by more than the noise band.
+        # Three conditions. The input must be able to decide the outcome at all;
+        # it must have more room to move the answer than noise does; and this
+        # particular answer must sit clear of the boundary by more than the noise.
+        if not self.input_can_decide:
+            return False
         return band < span and band < self.margin
 
     # -- rendering ----------------------------------------------------------
@@ -848,6 +864,13 @@ class StabilityReport:
         ratio = self.signal_to_noise
         ratio_text = "infinite" if ratio == float("inf") else f"{ratio:.1f}x"
 
+        if not self.input_can_decide:
+            return (
+                f"  NOT USABLE. the input cannot change this decision: an empty "
+                f"state lands on\n  the same side of {self.decision.describe()} "
+                f"as the full one. stability is irrelevant\n  when the answer was "
+                f"never in question"
+            )
         if span <= band:
             return (
                 f"  NOT USABLE. the input moves this answer by {span:.4f}, while "

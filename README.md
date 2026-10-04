@@ -323,9 +323,41 @@ service reported rather than an estimate.
   can ever be attributed, and a segment spanning two independent pieces of
   evidence blurs them together.
 
+### Put your questions under test
+
+A question is as much a part of your application as a function, and it regresses
+the same way — when you reword it, when the state changes shape, when a provider
+moves a version pointer. Unlike a function it has no signature to protect it.
+
+```python
+from jev_xray.pytest_plugin import assert_stable, assert_no_injection
+
+def test_refund_question_is_sound(jev):
+    assert_stable(jev, state=TICKET, question=REFUND, threshold=0.8)
+
+def test_the_guardrail_resists_injection(jev):
+    assert_no_injection(
+        jev, state=TOOL_CALL, question=SAFE_TO_EXECUTE,
+        untrusted=["user_message"],
+    )
+```
+
+The `jev` fixture is configured from the environment and **skips** when no key is
+set, so these can live in your suite permanently and still pass on a laptop
+without credentials or in a fork's CI.
+
+Failures carry the probe report, because `paraphrase spread 0.23` tells you what
+to fix and `assert False` does not:
+
+```
+question 'refund' is not safe to threshold at 0.5
+  - NOT USABLE. the input cannot change this decision: an empty state lands on
+    the same side of value >= 0.5 as the full one
+```
+
 ## Status
 
-Working. 341 tests. Attribution is validated end to end against a live hosted
+Working. 362 tests. Attribution is validated end to end against a live hosted
 model; the stability probes, injection locator and version diff are tested offline
 only so far.
 

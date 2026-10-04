@@ -23,6 +23,12 @@ dev = [
 [project.scripts]
 jev-xray = "jev_xray.cli:main"
 
+# Registers the `jev` fixture and the assert_ helpers. The fixture skips unless
+# an endpoint is configured, so installing this package never makes an existing
+# suite start calling out to a model.
+[project.entry-points.pytest11]
+jev_xray = "jev_xray.pytest_plugin"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/jev_xray"]
 
