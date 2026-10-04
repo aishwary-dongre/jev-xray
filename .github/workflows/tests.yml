@@ -100,11 +100,19 @@ jobs:
           print("ok: 8 states, 3 questions, 16 requests")
           PY
 
-      - name: HTML report is generated and carries no scripts
+      - name: Both HTML reports generate and carry no scripts
+        # These pages are rendered from state the caller may not trust and then
+        # opened in a browser, so script-free is a property worth enforcing in CI
+        # rather than hoping for.
         run: |
-          jev-xray demo --html report.html
-          test -s report.html
-          if grep -qi "<script" report.html; then
-            echo "the report must stay script-free: it is opened from untrusted runs"
-            exit 1
-          fi
+          jev-xray demo --html attribution.html
+          jev-xray stability examples/ticket.json -q refund_requested \
+            --fake --segmenter sentence --html stability.html || true
+          for page in attribution.html stability.html; do
+            test -s "$page" || { echo "$page was not written"; exit 1; }
+            if grep -qi "<script" "$page"; then
+              echo "$page contains a script tag"
+              exit 1
+            fi
+          done
+          echo "ok: both reports written, neither contains a script tag"

@@ -435,6 +435,17 @@ def _run_stability(args: argparse.Namespace) -> int:
         shuffles=args.shuffles,
     )
 
+    if args.html:
+        from .report_html import stability_to_html
+
+        target = Path(args.html)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            stability_to_html(report_obj, repo_url=args.html_link),
+            encoding="utf-8",
+        )
+        print(f"wrote {target}")
+
     if args.json:
         print(
             json.dumps(
@@ -443,6 +454,7 @@ def _run_stability(args: argparse.Namespace) -> int:
                     "question_id": report_obj.question_id,
                     "baseline": report_obj.baseline_value,
                     "threshold": report_obj.decision.threshold,
+                    "input_can_decide": report_obj.input_can_decide,
                     "usable_range": report_obj.usable_range,
                     "noise_band": report_obj.noise_band,
                     "signal_to_noise": (
@@ -473,7 +485,7 @@ def _run_stability(args: argparse.Namespace) -> int:
                 indent=2,
             )
         )
-    else:
+    elif not args.html:
         print(report_obj.summary())
 
     # Non-zero when the question is not safe to threshold on, so this can gate a
@@ -782,6 +794,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-usd", type=float, default=0.05, help="spend ceiling (default: 0.05)"
     )
     stab.add_argument("--json", action="store_true", help="emit machine-readable JSON")
+    stab.add_argument(
+        "--html",
+        metavar="PATH",
+        help="write a standalone HTML report, for sharing with whoever has to "
+        "agree the threshold is defensible",
+    )
+    stab.add_argument(
+        "--html-link",
+        metavar="URL",
+        help="add a header bar to the HTML report linking back to the source",
+    )
     stab.set_defaults(func=_run_stability)
 
     diff = subparsers.add_parser(

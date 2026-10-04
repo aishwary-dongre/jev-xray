@@ -24,7 +24,7 @@ from typing import Any
 
 from .attribution import Attribution, SegmentEffect
 
-__all__ = ["to_html"]
+__all__ = ["to_html", "stability_to_html"]
 
 _EPSILON = 1e-4
 
@@ -442,6 +442,174 @@ def to_html(
   {"&middot; token counts estimated, this host reported none, so spend is a projection at the configured price rather than a measurement" if ledger.tokens_are_estimated else ""}
   &middot; {ledger.wall_seconds:.2f}s
   &middot; generated {generated}
+  &middot; <code>jev-xray</code>
+</footer>
+
+</div></body></html>"""
+
+
+_STABILITY_CSS = """
+.verdict {
+  border-radius: 8px; padding: 18px 22px; margin: 4px 0 8px;
+  font-size: 15px; line-height: 1.55;
+}
+.verdict.ok   { background: #ecfdf5; border-left: 4px solid #059669; }
+.verdict.warn { background: #fffbeb; border-left: 4px solid #d97706; }
+.verdict.fail { background: #fef2f2; border-left: 4px solid #dc2626; }
+.verdict b { font-weight: 650; }
+
+table.probes { width: 100%; border-collapse: collapse; }
+table.probes td { padding: 11px 0; vertical-align: top;
+                  border-top: 1px solid var(--line); font-size: 14px; }
+table.probes tr:first-child td { border-top: 0; }
+td.flag { width: 78px; white-space: nowrap; }
+td.measure { width: 92px; text-align: right; font-variant-numeric: tabular-nums;
+             color: var(--muted); }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 99px;
+        font-size: 11px; font-weight: 650; letter-spacing: 0.04em;
+        text-transform: uppercase; }
+.pill.ok   { background: #d1fae5; color: #065f46; }
+.pill.warn { background: #fef3c7; color: #92400e; }
+.pill.fail { background: #fee2e2; color: #991b1b; }
+.pill.skip { background: #f3f4f6; color: #6b7280; }
+.probe-name { font-weight: 600; }
+.probe-detail { color: var(--muted); font-size: 13px; margin-top: 3px; }
+"""
+
+
+def _probe_rows(report: Any) -> str:
+    rows: list[str] = []
+    for probe in report.results:
+        if probe.skipped:
+            pill = '<span class="pill skip">skip</span>'
+            detail = html.escape(probe.skipped_reason or "")
+            measure = ""
+        else:
+            pill = f'<span class="pill {probe.verdict}">{probe.verdict}</span>'
+            detail = html.escape(probe.detail)
+            measure = (
+                "" if probe.measurement is None else f"{probe.measurement:+.4f}"
+            )
+        rows.append(
+            "<tr>"
+            f'<td class="flag">{pill}</td>'
+            f'<td><div class="probe-name">{html.escape(probe.name)}</div>'
+            f'<div class="probe-detail">{detail}</div></td>'
+            f'<td class="measure">{measure}</td>'
+            "</tr>"
+        )
+    return f'<table class="probes">{"".join(rows)}</table>'
+
+
+def stability_to_html(
+    report: Any, *, title: str | None = None, repo_url: str | None = None
+) -> str:
+    """Render a :class:`~jev_xray.stability.StabilityReport` as a standalone page.
+
+    The attribution report explains one answer. This one is about the question,
+    and it exists to be shared: the audience is whoever has to agree that a
+    threshold is defensible before it ships.
+
+    So the verdict leads and the probes follow. A reader who stops after the first
+    box should still come away with the right conclusion.
+    """
+    meaningful = report.threshold_is_meaningful()
+    if meaningful is None:
+        tone = "warn"
+    elif meaningful:
+        tone = "ok"
+    else:
+        tone = "fail"
+
+    heading = title or (
+        f"Can you threshold {report.question_id!r} on {report.model}?"
+    )
+
+    instructions = report.question.instructions
+    question_text = instructions if isinstance(instructions, str) else repr(instructions)
+
+    band = report.noise_band
+    span = report.usable_range
+    ratio = report.signal_to_noise
+
+    def stat(key: str, value: str, note: str) -> str:
+        return (
+            f'<div class="stat"><div class="k">{html.escape(key)}</div>'
+            f'<div class="v">{html.escape(value)}</div>'
+            f'<div class="k" style="font-weight:400;text-transform:none;'
+            f'letter-spacing:0">{html.escape(note)}</div></div>'
+        )
+
+    stats = [
+        stat("answer", f"{report.baseline_value:.4f}", report.target.describe()),
+        stat(
+            "usable range",
+            "n/a" if span is None else f"{span:.4f}",
+            "how far the input moves it",
+        ),
+        stat(
+            "noise band",
+            "n/a" if band is None else f"{band:.4f}",
+            "movement from things that should not matter",
+        ),
+        stat(
+            "signal / noise",
+            "n/a"
+            if ratio is None
+            else ("infinite" if ratio == float("inf") else f"{ratio:.1f}x"),
+            f"margin to boundary {report.margin:.4f}",
+        ),
+    ]
+
+    verdict = html.escape(report.verdict_line().strip())
+
+    ledger = report.ledger
+    estimated = (
+        " &middot; token counts estimated, this host reported none"
+        if ledger.tokens_are_estimated
+        else ""
+    )
+
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(heading)}</title>
+<style>{_CSS}{_BANNER_CSS if repo_url else ""}{_STABILITY_CSS}</style></head>
+<body><div class="wrap">
+
+{_banner(repo_url) if repo_url else ""}
+<h1>{html.escape(heading)}</h1>
+<div class="sub">
+  asked <code>{html.escape(question_text)}</code>
+  &nbsp;&middot;&nbsp; boundary <code>{html.escape(report.decision.describe())}</code>
+  &nbsp;&middot;&nbsp; model <code>{html.escape(report.model)}</code>
+</div>
+
+<h2>verdict</h2>
+<div class="verdict {tone}">{verdict}</div>
+
+<div class="headline">{"".join(stats)}</div>
+
+<h2>probes</h2>
+{_probe_rows(report)}
+
+<h2>how to read this</h2>
+<div class="note"><p><b>Usable range</b> is how far the answer moves between an
+empty state and the real one: all the room the input has to work in. <b>Noise
+band</b> is the largest movement produced by a perturbation that should have moved
+nothing at all &mdash; filler text, reordered evidence, reshuffled options, a
+reworded question.</p>
+<p>A threshold is defensible when the input can decide the outcome, the range
+exceeds the band, and this particular answer sits clear of the boundary by more
+than the band. Every probe here is label-free: it needs no ground truth, only
+changes that should not have mattered.</p></div>
+
+<footer>
+  {ledger.requests} requests
+  &middot; {ledger.input_tokens:,} input tokens
+  &middot; ${ledger.usd:.6f}{estimated}
+  &middot; {ledger.wall_seconds:.2f}s
+  &middot; generated {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}
   &middot; <code>jev-xray</code>
 </footer>
 

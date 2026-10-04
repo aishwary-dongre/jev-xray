@@ -357,7 +357,7 @@ question 'refund' is not safe to threshold at 0.5
 
 ## Status
 
-Working. 362 tests. Attribution is validated end to end against a live hosted
+Working. 382 tests. Attribution is validated end to end against a live hosted
 model; the stability probes, injection locator and version diff are tested offline
 only so far.
 
