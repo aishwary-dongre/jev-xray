@@ -1,0 +1,20 @@
+{
+  "_comment": "A multi-turn transcript, long enough that exact Shapley over every sentence is out of reach. Coarse-to-fine attributes the turns exactly, then re-attributes inside only the turns that carried weight. Run with: jev-xray explain examples/transcript.json -q refund_requested --method drill",
+
+  "state": "Customer: My order A-104 arrived yesterday and the outer box was crushed on one corner. The jacket itself looks fine honestly. I have not worn it yet.\nAgent: Thanks for flagging that. I can see the order on your account and it shipped on the 2nd.\nCustomer: I have been shopping with you since 2019 and never had a problem before. I am not sure whether to send it back or just keep it at a discount. Your policy page says damaged items qualify for a full refund. Let me know what my options are.\nAgent: I can offer either. Which would you prefer?\nCustomer: Honestly whichever is faster. I need something to wear this weekend.",
+
+  "questions": {
+    "refund_requested": {
+      "type": "noul",
+      "instructions": "The customer is asking for their money back.",
+      "criteria": {
+        "true": "The customer wants a refund, stated or clearly implied",
+        "false": "The customer wants something else, or has not asked for anything yet"
+      }
+    },
+    "needs_human": {
+      "type": "noul",
+      "instructions": "This conversation needs a human agent rather than an automated reply."
+    }
+  }
+}

@@ -148,7 +148,17 @@ class XRay:
 
             return await deep_explain(client, state, question, budget=budget, **kwargs)
 
-        raise ValueError(f"unknown method {method!r}; expected loo, shapley or deep")
+        if method == "drill":
+            from .drill import drill_down
+
+            # The coarse pass picks its own segmenter, so a fine-grained default
+            # passed through from the CLI would defeat the point.
+            kwargs.pop("segmenter", None)
+            return await drill_down(client, state, question, budget=budget, **kwargs)
+
+        raise ValueError(
+            f"unknown method {method!r}; expected loo, shapley, deep or drill"
+        )
 
     def probe(
         self, state: State, question: Question, *, method: str = "deep", **kwargs: Any

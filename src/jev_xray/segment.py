@@ -40,6 +40,7 @@ __all__ = [
     "TurnSegmenter",
     "JsonFieldSegmenter",
     "DEFAULT_MASK",
+    "WithinSpan",
     "get_segmenter",
     "auto_segmenter",
     "reassemble",
@@ -294,6 +295,45 @@ class TurnSegmenter(_SpanSegmenter):
 # --------------------------------------------------------------------------
 # JSON states: segments are paths, ablation rewrites the structure
 # --------------------------------------------------------------------------
+
+
+class WithinSpan(_SpanSegmenter):
+    """Segment finely inside one region, holding the rest of the state fixed.
+
+    The basis of coarse-to-fine attribution. Exact Shapley needs every one of 2^n
+    coalitions, so it stops being affordable somewhere around nine segments and a
+    forty-sentence document is out of reach entirely. Splitting that document
+    into paragraphs, attributing those exactly, and then re-attributing inside
+    only the paragraphs that mattered costs 2^6 + 2^5 + 2^5 instead of 2^40.
+
+    The restriction matters for correctness, not just cost. Every coalition still
+    contains the whole rest of the state, so a fine value measures that sentence's
+    contribution *in its real context* rather than in a paragraph standing alone.
+    """
+
+    kind = "within"
+
+    def __init__(
+        self,
+        inner: "_SpanSegmenter",
+        start: int,
+        end: int,
+        *,
+        mask: str = DEFAULT_MASK,
+    ) -> None:
+        super().__init__(mask=mask)
+        self._inner = inner
+        self._start = start
+        self._end = end
+        self.kind = f"within-{inner.kind}"
+
+    def _spans(self, text: str) -> list[tuple[int, int]]:
+        start = max(0, min(self._start, len(text)))
+        end = max(start, min(self._end, len(text)))
+        region = text[start:end]
+        return [
+            (start + a, start + b) for a, b in self._inner._spans(region)
+        ]
 
 
 class JsonFieldSegmenter:

@@ -164,6 +164,13 @@ def _deep_blocks(deep: Any, color: bool) -> str:
 
 
 def _emit(result: Any, args: argparse.Namespace) -> None:
+    if hasattr(result, "regions") and hasattr(result, "coarse"):
+        # A drill-down carries two levels that are deliberately not one ranking,
+        # so it renders itself rather than being squeezed into the single-map
+        # heatmap and table.
+        print(result.summary())
+        return
+
     attribution, deep = _split(result)
     if getattr(args, "html", None):
         from .report_html import to_html
@@ -689,12 +696,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     explain.add_argument(
         "--method",
-        choices=("loo", "shapley", "deep"),
+        choices=("loo", "shapley", "deep", "drill"),
         default="deep",
         help=(
             "loo: one request per segment, cheapest, blind to interaction. "
             "shapley: average marginal contribution, correct under interaction. "
-            "deep: shapley plus minimal evidence and counterfactual (default)"
+            "deep: shapley plus minimal evidence and counterfactual (default). "
+            "drill: coarse-to-fine, for states too long to attribute exactly"
         ),
     )
     explain.add_argument(

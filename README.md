@@ -282,6 +282,44 @@ version bump can gate a deploy.
 Costs two requests per state no matter how many questions you ask, because every
 question for one state goes in a single call.
 
+### States too long to attribute exactly
+
+Exact Shapley evaluates all 2ⁿ coalitions: fine at six segments, impossible at
+forty. `--method drill` attributes coarsely and exactly, then re-attributes inside
+only the regions that carried weight.
+
+```bash
+jev-xray explain examples/transcript.json -q refund_requested --method drill
+```
+
+```
+drilled into the top 2 (sentence)
+  [turn 2] contributed +0.7506
+      +0.6989  Your policy page says damaged items qualify for a full refund.
+      +0.1329  I am not sure whether to send it back or just keep it at a discount.
+      inside sums to +0.9485, against a coarse value of +0.7506. the -0.1979 gap
+      is this region interacting with the others, not an error
+
+  [turn 4] contributed -0.2130
+      +0.0010  I need something to wear this weekend.
+      -0.0005  Honestly whichever is faster.
+      inside sums to +0.0005, against a coarse value of -0.2130
+```
+
+Every coalition in the fine pass still carries the whole rest of the state, so a
+sentence's value is its contribution *in context* rather than inside an isolated
+paragraph.
+
+The two levels are deliberately **not** presented as one ranking. Coarse values
+are exact Shapley values summing to the total swing; a fine map sums to the swing
+from removing its whole region with the others present, which is that region's
+leave-one-out effect. Those agree only when regions do not interact, so the gap is
+reported rather than smoothed over. Turn 4 above is the case that makes this
+matter: it contributed −0.213 while neither of its sentences does anything alone,
+so its entire effect is interaction with other turns. A tool that silently
+presented the fine values as a decomposition would have shown you two zeroes and
+implied the turn was irrelevant.
+
 ### The two smallest answers
 
 An attribution map is the right output for diagnosing a *question*. It is the
@@ -406,7 +444,7 @@ produces an approval.
 
 ## Status
 
-Working. 382 tests. Attribution, stability and injection are validated against a
+Working. 404 tests. Attribution, stability and injection are validated against a
 live hosted model. Version diffing is tested offline only: it needs two model
 versions, and only one free endpoint is available.
 
