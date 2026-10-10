@@ -19,7 +19,23 @@ offline against a deterministic fixture.
 
 from __future__ import annotations
 
-__version__ = "0.1.0.dev0"
+def _detect_version() -> str:
+    """Read the version from installed metadata rather than restating it here.
+
+    A literal in this file is a second source of truth, and it drifted from
+    pyproject.toml the first time the version changed — reporting 0.1.0.dev0 from
+    a 0.1.0 install. Since the version is what a bug report quotes and what a
+    pinned explanation records, being wrong about it is worse than being absent.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("jev-xray")
+    except PackageNotFoundError:  # a source tree that was never installed
+        return "0+unknown"
+
+
+__version__ = _detect_version()
 
 from .attribution import Attribution, SegmentEffect, leave_one_out
 from .budget import (

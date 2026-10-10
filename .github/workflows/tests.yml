@@ -38,6 +38,53 @@ jobs:
         # job is where it will show up.
         run: python -m pytest -q
 
+  package:
+    # Building is not the same as being installable. This checks the artifact a
+    # stranger would actually get: no source tree on the path, no editable
+    # install, no dev extras.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine check dist/*
+
+      - name: Install the wheel into a clean environment
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install dist/*.whl
+
+      - name: It works from the installed package
+        working-directory: /tmp
+        run: |
+          /tmp/clean/bin/jev-xray demo --no-color > /dev/null
+          /tmp/clean/bin/python - <<'PY'
+          from importlib.metadata import version
+          import jev_xray
+          declared, reported = version("jev-xray"), jev_xray.__version__
+          assert declared == reported, f"{declared} packaged, {reported} reported"
+          assert jev_xray.XRay and jev_xray.to_html
+          print(f"ok: jev-xray {reported} installs and runs from the wheel")
+          PY
+
+      - name: The license ships with it
+        run: |
+          python - <<'PY'
+          import zipfile, glob
+          wheel = glob.glob("dist/*.whl")[0]
+          names = zipfile.ZipFile(wheel).namelist()
+          assert any(n.endswith("LICENSE") for n in names), names
+          print("ok: LICENSE is in the wheel")
+          PY
+
   smoke:
     # The first thing anyone does with this repo is run the demo. If that breaks,
     # the tests passing is not much comfort.

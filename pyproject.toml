@@ -4,16 +4,51 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jev-xray"
-version = "0.1.0.dev0"
-description = "Decision forensics for System One models: attribution, counterfactuals and stability probes for TypeSafe AI's Jev."
+version = "0.1.0"
+description = "Decision forensics for System One models: which part of the input caused this decision, and is the question safe to threshold on."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
-keywords = ["jev", "typesafe", "system-one", "interpretability", "attribution", "xai"]
+license = { file = "LICENSE" }
+authors = [{ name = "Aishwary Dongre", email = "dongreaishwary@gmail.com" }]
+keywords = [
+    "jev",
+    "typesafe",
+    "system-one",
+    "interpretability",
+    "explainability",
+    "attribution",
+    "shapley",
+    "prompt-injection",
+    "xai",
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+    "Framework :: Pytest",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
 
 dependencies = [
     "httpx>=0.27",
 ]
+
+[project.urls]
+Homepage = "https://github.com/aishwary-dongre/jev-xray"
+Source = "https://github.com/aishwary-dongre/jev-xray"
+Demo = "https://aishwary-dongre.github.io/jev-xray/"
+Issues = "https://github.com/aishwary-dongre/jev-xray/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -31,6 +66,18 @@ jev_xray = "jev_xray.pytest_plugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/jev_xray"]
+
+[tool.hatch.build.targets.sdist]
+# The examples are referenced by the README and by CI, and the tests are how
+# anyone packaging this downstream verifies it. Both belong in the sdist.
+include = [
+    "/src",
+    "/tests",
+    "/examples",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

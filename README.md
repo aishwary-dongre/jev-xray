@@ -106,9 +106,12 @@ on Jev. What generalises is the class of bug, not the numbers.
 ## Try it in two minutes, free, no card
 
 ```bash
-pip install -e ".[dev]"
+pip install jev-xray
 jev-xray demo                        # offline, no account at all
+jev-xray demo --scenario injection   # a guardrail steered by user input
 ```
+
+From a checkout, `pip install -e ".[dev]"` and `pytest` for the suite.
 
 Three estimators, selected with `--method`:
 
