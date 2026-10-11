@@ -271,7 +271,8 @@ class TestDeclaredTypeCrossCheck:
     QUESTION = {"q": Noul(instructions="true?")}
 
     def test_a_matching_declared_type_is_accepted(self):
-        parsed = _parse(self.QUESTION, {"answers": {"q": {"type": "noul", "noul": 0.5}}, "usage": {}})
+        body = {"answers": {"q": {"type": "noul", "noul": 0.5}}, "usage": {}}
+        parsed = _parse(self.QUESTION, body)
         assert parsed.answers["q"].noul == 0.5
 
     def test_a_mismatched_declared_type_is_rejected(self):

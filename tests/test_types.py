@@ -101,7 +101,11 @@ class TestResponseValidation:
     def test_parses_a_noul(self):
         parsed = parse_response(
             _request(self.NOUL),
-            {"model": "jev-1.13.0", "answers": {"q": {"noul": 0.72}}, "usage": {"input_tokens": 10}},
+            {
+                "model": "jev-1.13.0",
+                "answers": {"q": {"noul": 0.72}},
+                "usage": {"input_tokens": 10},
+            },
         )
         assert isinstance(parsed.answers["q"], NoulAnswer)
         assert parsed.answers["q"].noul == 0.72

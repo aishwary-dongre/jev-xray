@@ -19,7 +19,7 @@ from typing import Any
 from .attribution import Attribution, leave_one_out
 from .budget import Budget, RateLimiter
 from .cache import MemoryCache, ResponseCache
-from .client import DEFAULT_MODEL, Client  # noqa: F401  (Client used in aprobe)
+from .client import DEFAULT_MODEL, Client
 from .segment import AblationMode, Segmenter
 from .transport.base import Transport
 from .transport.fake import FakeTransport, Signal
@@ -60,7 +60,7 @@ class XRay:
     # -- constructors -------------------------------------------------------
 
     @classmethod
-    def fake(cls, signals: Any = (), *, bias: float = 0.0, **kwargs: Any) -> "XRay":
+    def fake(cls, signals: Any = (), *, bias: float = 0.0, **kwargs: Any) -> XRay:
         """An offline instance backed by the deterministic fake.
 
         For development and tests, and for demonstrating the tool while hosted
@@ -224,7 +224,7 @@ class XRay:
         if self._owns_transport:
             await self._transport.aclose()
 
-    async def __aenter__(self) -> "XRay":
+    async def __aenter__(self) -> XRay:
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:

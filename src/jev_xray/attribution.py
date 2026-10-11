@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Sequence
 
 from .budget import (
     PRICE_USD_PER_INPUT_TOKEN,
@@ -38,7 +37,7 @@ from .coalition import CoalitionEvaluator
 from .segment import AblationMode, Segment, Segmenter, auto_segmenter, get_segmenter
 from .types import Answer, Question, State, SystemOneRequest, Target
 
-__all__ = ["SegmentEffect", "Attribution", "leave_one_out"]
+__all__ = ["Attribution", "SegmentEffect", "leave_one_out"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +96,8 @@ class Attribution:
         return self.ranked()[:n]
 
     def supporting(self, min_delta: float = 0.0) -> list[SegmentEffect]:
-        return [e for e in sorted(self.effects, key=lambda e: e.delta, reverse=True) if e.delta > min_delta]
+        ranked = sorted(self.effects, key=lambda e: e.delta, reverse=True)
+        return [e for e in ranked if e.delta > min_delta]
 
     def opposing(self, min_delta: float = 0.0) -> list[SegmentEffect]:
         return [e for e in sorted(self.effects, key=lambda e: e.delta) if e.delta < -min_delta]
@@ -239,7 +239,7 @@ async def leave_one_out(
 
     effects: list[SegmentEffect] = []
     failures: list[tuple[Segment, str]] = []
-    for segment, result in zip(segments, results):
+    for segment, result in zip(segments, results, strict=True):
         if isinstance(result, BaseException):
             if isinstance(result, (BudgetExceeded, asyncio.CancelledError)):
                 failures.append((segment, type(result).__name__))
@@ -258,7 +258,7 @@ async def leave_one_out(
     if include_empty:
         try:
             empty_value = await evaluator.value(evaluator.nothing)
-        except Exception:  # noqa: BLE001 - a diagnostic reference, never fatal
+        except Exception:
             empty_value = None
 
     ledger.finish()

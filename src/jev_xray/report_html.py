@@ -19,12 +19,12 @@ Design constraints, all deliberate:
 from __future__ import annotations
 
 import html
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from .attribution import Attribution, SegmentEffect
 
-__all__ = ["to_html", "stability_to_html"]
+__all__ = ["stability_to_html", "to_html"]
 
 _EPSILON = 1e-4
 
@@ -174,7 +174,8 @@ def _bars(attribution: Attribution, strongest: float, limit: int) -> str:
         width = f"{share * 100:.1f}%"
         positive = effect.signed > 0
 
-        left = f'<div class="bar neg" style="width:{width}"></div>' if not positive and share else ""
+        bar = f'<div class="bar neg" style="width:{width}"></div>'
+        left = bar if not positive and share else ""
         right = f'<div class="bar pos" style="width:{width}"></div>' if positive and share else ""
 
         rows.append(
@@ -400,7 +401,13 @@ def to_html(
         )
 
     ledger = attribution.ledger
-    generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    generated = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    estimated_note = (
+        "&middot; token counts estimated, this host reported none, so spend is a "
+        "projection at the configured price rather than a measurement"
+        if ledger.tokens_are_estimated
+        else ""
+    )
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -439,7 +446,7 @@ def to_html(
   {f"&middot; {ledger.avoided_requests} avoided by cache" if ledger.avoided_requests else ""}
   &middot; {ledger.input_tokens:,} input tokens
   &middot; ${ledger.usd:.6f}
-  {"&middot; token counts estimated, this host reported none, so spend is a projection at the configured price rather than a measurement" if ledger.tokens_are_estimated else ""}
+  {estimated_note}
   &middot; {ledger.wall_seconds:.2f}s
   &middot; generated {generated}
   &middot; <code>jev-xray</code>
@@ -609,7 +616,7 @@ changes that should not have mattered.</p></div>
   &middot; {ledger.input_tokens:,} input tokens
   &middot; ${ledger.usd:.6f}{estimated}
   &middot; {ledger.wall_seconds:.2f}s
-  &middot; generated {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}
+  &middot; generated {datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")}
   &middot; <code>jev-xray</code>
 </footer>
 

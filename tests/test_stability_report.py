@@ -68,16 +68,16 @@ def synthetic(**kwargs) -> StabilityReport:
     from jev_xray import Ledger
     from jev_xray.types import Target
 
-    defaults = dict(
-        question_id="q",
-        question=REFUND,
-        model="m",
-        target=Target("noul"),
-        baseline_value=0.9,
-        decision=Decision(0.5),
-        results=[],
-        ledger=Ledger(),
-    )
+    defaults = {
+        "question_id": "q",
+        "question": REFUND,
+        "model": "m",
+        "target": Target("noul"),
+        "baseline_value": 0.9,
+        "decision": Decision(0.5),
+        "results": [],
+        "ledger": Ledger(),
+    }
     defaults.update(kwargs)
     return StabilityReport(**defaults)
 

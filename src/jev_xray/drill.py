@@ -32,17 +32,14 @@ computed, and the result keeps them separate.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Sequence
+from dataclasses import dataclass
 
 from .budget import Budget, Ledger
 from .client import Client
 from .segment import (
     AblationMode,
-    LineSegmenter,
     Segment,
     Segmenter,
-    SentenceSegmenter,
     TurnSegmenter,
     WithinSpan,
     get_segmenter,
@@ -50,7 +47,7 @@ from .segment import (
 from .shapley import ShapleyAttribution, shapley
 from .types import Question, State, Target
 
-__all__ = ["Region", "DrillDown", "drill_down"]
+__all__ = ["DrillDown", "Region", "drill_down"]
 
 
 @dataclass(slots=True)

@@ -18,7 +18,7 @@ import sys
 
 from .attribution import Attribution, SegmentEffect
 
-__all__ = ["heatmap", "table", "report", "supports_color"]
+__all__ = ["heatmap", "report", "supports_color", "table"]
 
 _RESET = "\x1b[0m"
 _FG_BLACK = "\x1b[38;5;16m"
@@ -143,10 +143,10 @@ def report(attribution: Attribution, *, color: bool | None = None, limit: int = 
         blocks += [
             "",
             _dimmed("note", color),
-            f"  interaction residual {residual:+.4f}: these segments do not act "
+            (f"  interaction residual {residual:+.4f}: these segments do not act "
             f"independently,\n  so treat the ranking as indicative and the "
             f"magnitudes as not additive.\n  re-run with --method shapley to "
-            f"attribute them properly.",
+            f"attribute them properly."),
         ]
 
     if attribution.failures:

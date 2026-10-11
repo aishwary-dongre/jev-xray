@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 from .types import (
     Choice,
@@ -33,7 +34,7 @@ from .types import (
     parse_answer,
 )
 
-__all__ = ["CheckResult", "build_probe", "run_check", "PROBE_STATE"]
+__all__ = ["PROBE_STATE", "CheckResult", "build_probe", "run_check"]
 
 PROBE_STATE = (
     "A customer writes: my card was charged twice for order 5512 and "
@@ -131,7 +132,7 @@ async def run_check(transport: Any, model: str, endpoint: str) -> CheckResult:
     started = time.monotonic()
     try:
         body = await transport.send(request)
-    except Exception as exc:  # noqa: BLE001 - this is a diagnostic, it reports
+    except Exception as exc:
         result.transport_error = f"{type(exc).__name__}: {exc}"
         return result
     finally:

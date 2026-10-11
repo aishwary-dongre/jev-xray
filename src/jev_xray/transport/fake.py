@@ -21,8 +21,9 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from ..budget import estimate_tokens
 from ..types import Choice, Noul, Score, SystemOneRequest
@@ -140,7 +141,7 @@ class FakeTransport:
         else:  # pragma: no cover - guarded by the type union
             raise TypeError(f"unsupported question type {type(question).__name__}")
 
-        logits = {label: self.bias for label in labels}
+        logits = dict.fromkeys(labels, self.bias)
         if self.first_option_bonus and labels:
             logits[labels[0]] += self.first_option_bonus
         for s in signals:

@@ -25,8 +25,9 @@ starting point for judgement, not a standard.
 from __future__ import annotations
 
 import random
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Awaitable, Callable, Literal, Mapping, Sequence
+from typing import Literal
 
 from .budget import Budget, BudgetExceeded, Ledger
 from .client import Client
@@ -43,22 +44,22 @@ from .segment import (
 from .types import Answer, Choice, Noul, Question, State, Target
 
 __all__ = [
-    "Verdict",
-    "ProbeResult",
-    "ProbeContext",
-    "DISTRACTOR",
-    "prior_saturation",
-    "distractor_drift",
-    "order_sensitivity",
-    "option_order_flip",
-    "negation_coherence",
-    "paraphrase_spread",
-    "framings",
-    "build_context",
-    "run_probes",
-    "StabilityReport",
-    "stability",
     "DEFAULT_PROBES",
+    "DISTRACTOR",
+    "ProbeContext",
+    "ProbeResult",
+    "StabilityReport",
+    "Verdict",
+    "build_context",
+    "distractor_drift",
+    "framings",
+    "negation_coherence",
+    "option_order_flip",
+    "order_sensitivity",
+    "paraphrase_spread",
+    "prior_saturation",
+    "run_probes",
+    "stability",
 ]
 
 Verdict = Literal["ok", "warn", "fail"]
@@ -253,7 +254,10 @@ async def distractor_drift(
     appended = await ctx.ask(state=f"{ctx.state}\n{distractor}")
     prepended = await ctx.ask(state=f"{distractor}\n{ctx.state}")
 
-    shifts = {"appended": appended - ctx.baseline_value, "prepended": prepended - ctx.baseline_value}
+    shifts = {
+        "appended": appended - ctx.baseline_value,
+        "prepended": prepended - ctx.baseline_value,
+    }
     worst_name = max(shifts, key=lambda k: abs(shifts[k]))
     worst = shifts[worst_name]
 
@@ -429,7 +433,7 @@ async def run_probes(
                 )
             )
             break
-        except Exception as exc:  # noqa: BLE001 - one probe failing is not fatal
+        except Exception as exc:
             results.append(
                 ProbeResult(
                     name=_probe_name(probe),
@@ -896,8 +900,8 @@ class StabilityReport:
             f"question {self.question_id!r} on {self.model}  [stability]",
             f"  target        {self.target.describe()} = {self.baseline_value:.4f}",
             f"  boundary      {self.decision.describe()}",
-            f"  probes        {len(self.ran)} ran, "
-            f"{len(self.results) - len(self.ran)} skipped, worst: {self.worst_verdict}",
+            (f"  probes        {len(self.ran)} ran, "
+            f"{len(self.results) - len(self.ran)} skipped, worst: {self.worst_verdict}"),
             f"  spent         {self.ledger.summary()}",
             "",
             "probes",

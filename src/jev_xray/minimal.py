@@ -22,18 +22,18 @@ in importance order, and a later addition can make an earlier one redundant.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 from .coalition import CoalitionEvaluator
 from .segment import Segment
 
 __all__ = [
     "Decision",
-    "SufficientEvidence",
     "FlippingSet",
-    "minimal_sufficient",
+    "SufficientEvidence",
     "minimal_flip",
+    "minimal_sufficient",
 ]
 
 

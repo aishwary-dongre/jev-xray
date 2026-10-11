@@ -29,14 +29,15 @@ Failures carry the full probe report rather than a bare assertion, because
 from __future__ import annotations
 
 import os
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import pytest
 
 from .minimal import Decision
 from .types import Question, State
 
-__all__ = ["assert_stable", "assert_no_injection", "jev"]
+__all__ = ["assert_no_injection", "assert_stable", "jev"]
 
 
 def pytest_configure(config: Any) -> None:

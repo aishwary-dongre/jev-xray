@@ -29,9 +29,9 @@ from __future__ import annotations
 import math
 import random
 import statistics
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import combinations
-from typing import Sequence
 
 from .budget import (
     PRICE_USD_PER_INPUT_TOKEN,
@@ -46,11 +46,11 @@ from .segment import AblationMode, Segment, Segmenter, auto_segmenter, get_segme
 from .types import Answer, Question, State, SystemOneRequest, Target
 
 __all__ = [
-    "ShapleyEffect",
-    "ShapleyAttribution",
-    "shapley",
-    "MAX_EXACT_SEGMENTS",
     "DEFAULT_SAMPLES",
+    "MAX_EXACT_SEGMENTS",
+    "ShapleyAttribution",
+    "ShapleyEffect",
+    "shapley",
 ]
 
 # 2**9 = 512 coalitions. Beyond this, exact enumeration starts costing real wall
@@ -199,8 +199,8 @@ class ShapleyAttribution:
             f"  empty state   {self.empty_value:.4f} (total swing {self.total_swing:+.4f})",
             f"  segments      {len(self.segments)} ({self.mode} ablation)",
             f"  method        {method}",
-            f"  efficiency    {self.efficiency_gap:+.4f} "
-            f"({'exact, arithmetic check' if self.exact else 'sampling error'})",
+            (f"  efficiency    {self.efficiency_gap:+.4f} "
+            f"({'exact, arithmetic check' if self.exact else 'sampling error'})"),
         ]
         if self.failures:
             lines.append(f"  failed        {len(self.failures)} coalitions")
@@ -380,10 +380,9 @@ def _fits(requests: int, state: State, questions: dict, budget: Budget) -> bool:
     projected = per_request * requests
     if budget.max_input_tokens is not None and projected > budget.max_input_tokens:
         return False
-    if budget.max_usd is not None:
-        if projected * PRICE_USD_PER_INPUT_TOKEN > budget.max_usd:
-            return False
-    return True
+    if budget.max_usd is None:
+        return True
+    return projected * PRICE_USD_PER_INPUT_TOKEN <= budget.max_usd
 
 
 def _preflight(

@@ -5,10 +5,10 @@ from .fake import FakeTransport, Signal
 from .http import TYPESAFE_ENDPOINT, HttpTransport
 
 __all__ = [
-    "Transport",
-    "TransportError",
-    "HttpTransport",
     "TYPESAFE_ENDPOINT",
     "FakeTransport",
+    "HttpTransport",
     "Signal",
+    "Transport",
+    "TransportError",
 ]

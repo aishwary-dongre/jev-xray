@@ -13,8 +13,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from jev_xray import Budget, Client, FakeTransport, Noul, RateLimiter, Signal, to_html
 from jev_xray.minimal import Decision
 from jev_xray.report_html import stability_to_html
@@ -34,6 +32,9 @@ REFUND = Noul(
 )
 
 
+_DEFAULT_SIGNALS = (Signal(r"money back", 3.0),)
+
+
 def run(coro):
     return asyncio.run(coro)
 
@@ -46,7 +47,7 @@ def client(signals=(), bias=0.0):
     )
 
 
-def stability_report(signals=(Signal(r"money back", 3.0),), bias=-1.5, **kwargs):
+def stability_report(signals=_DEFAULT_SIGNALS, bias=-1.5, **kwargs):
     async def go():
         return await stability(
             client(signals, bias),
@@ -61,7 +62,7 @@ def stability_report(signals=(Signal(r"money back", 3.0),), bias=-1.5, **kwargs)
     return run(go())
 
 
-def attribution_report(signals=(Signal(r"money back", 3.0),), bias=-1.5):
+def attribution_report(signals=_DEFAULT_SIGNALS, bias=-1.5):
     async def go():
         return await shapley(
             client(signals, bias),

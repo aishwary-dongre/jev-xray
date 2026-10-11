@@ -13,18 +13,19 @@ from __future__ import annotations
 import asyncio
 import os
 import random
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from ..types import SystemOneRequest
 from .base import TransportError
 
 __all__ = [
-    "HttpTransport",
-    "TYPESAFE_ENDPOINT",
-    "VERCEL_TYPESAFE_ENDPOINT",
     "LANGSMITH_ENDPOINT",
     "LOCAL_ENDPOINT",
     "PROVIDERS",
+    "TYPESAFE_ENDPOINT",
+    "VERCEL_TYPESAFE_ENDPOINT",
+    "HttpTransport",
     "resolve_provider",
 ]
 
@@ -164,7 +165,7 @@ class HttpTransport:
                     raise TransportError("request timed out") from exc
                 await self._backoff(attempt, None)
                 continue
-            except httpx.HTTPError as exc:
+            except httpx.HTTPError:
                 # Deliberately drops the underlying cause's detail, which can
                 # echo the URL and headers.
                 if attempt == self._max_retries:

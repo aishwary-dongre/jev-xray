@@ -255,7 +255,7 @@ class TestBudget:
                 exact=True,
             )
 
-        with pytest.raises(BudgetExceeded, match="lower\\s+samples"):
+        with pytest.raises(BudgetExceeded, match=r"lower\s+samples"):
             run(go())
 
     def test_a_cost_ceiling_is_enforced(self):

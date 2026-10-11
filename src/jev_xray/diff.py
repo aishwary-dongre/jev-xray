@@ -29,8 +29,9 @@ states and eight questions is two hundred requests, not sixteen hundred.
 from __future__ import annotations
 
 import statistics
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Mapping, Sequence
+from typing import Literal
 
 from .budget import Budget, BudgetExceeded, Ledger
 from .client import Client
@@ -216,7 +217,7 @@ async def version_diff(
             )
         except BudgetExceeded:
             raise
-        except Exception:  # noqa: BLE001 - one bad state must not lose the run
+        except Exception:
             for drift in drifts.values():
                 drift.errors += 1
             continue
@@ -234,7 +235,7 @@ async def version_diff(
             try:
                 left = target.read(baseline_answer)
                 right = target.read(after.answers[qid])
-            except Exception:  # noqa: BLE001 - e.g. an option that no longer exists
+            except Exception:
                 drift.errors += 1
                 continue
 

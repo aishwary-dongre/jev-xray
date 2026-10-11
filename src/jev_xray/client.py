@@ -10,14 +10,22 @@ from __future__ import annotations
 
 import asyncio
 import warnings
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from .budget import Budget, Ledger, RateLimiter, estimate_tokens
 from .cache import MemoryCache, ResponseCache, cache_key
 from .transport.base import Transport
-from .types import Question, State, SystemOneRequest, SystemOneResponse, is_alias, parse_response
+from .types import (
+    Question,
+    State,
+    SystemOneRequest,
+    SystemOneResponse,
+    is_alias,
+    parse_response,
+)
 
-__all__ = ["Client", "DEFAULT_MODEL"]
+__all__ = ["DEFAULT_MODEL", "Client"]
 
 # Pinned on purpose. jev-latest and jev-preview move when a release ships, and
 # an explanation or a tuned threshold that cannot name the version that produced
@@ -109,7 +117,7 @@ class Client:
     async def aclose(self) -> None:
         await self.transport.aclose()
 
-    async def __aenter__(self) -> "Client":
+    async def __aenter__(self) -> Client:
         return self
 
     async def __aexit__(self, *exc_info: object) -> None:

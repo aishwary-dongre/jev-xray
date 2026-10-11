@@ -16,10 +16,10 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
-from .attribution import Attribution
 from .budget import Budget, RateLimiter
 from .cache import MemoryCache
 from .explain import XRay
@@ -156,9 +156,9 @@ def _deep_blocks(deep: Any, color: bool) -> str:
         parts += [
             "",
             _dimmed("warning", color),
-            f"  an empty state already answers {prior:.4f}, the same side of "
+            (f"  an empty state already answers {prior:.4f}, the same side of "
             f"{decision.describe()} as the full state.\n  this question cannot "
-            f"discriminate: the answer is mostly a prior the input never touches.",
+            f"discriminate: the answer is mostly a prior the input never touches."),
         ]
     return "\n".join(parts)
 
@@ -892,7 +892,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 130
     except SystemExit:
         raise
-    except Exception as exc:  # noqa: BLE001 - a CLI should not traceback at a user
+    except Exception as exc:
         print(f"jev-xray: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
 

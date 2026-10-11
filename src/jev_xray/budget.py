@@ -20,9 +20,9 @@ import time
 from dataclasses import dataclass, field
 
 __all__ = [
-    "PRICE_USD_PER_INPUT_TOKEN",
     "DEFAULT_REQUESTS_PER_MINUTE",
     "DEFAULT_TOKENS_PER_SECOND",
+    "PRICE_USD_PER_INPUT_TOKEN",
     "Budget",
     "BudgetExceeded",
     "Ledger",
@@ -81,7 +81,7 @@ class Budget:
     max_input_tokens: int | None = None
 
     @classmethod
-    def unlimited(cls) -> "Budget":
+    def unlimited(cls) -> Budget:
         return cls(max_requests=None, max_usd=None, max_input_tokens=None)
 
 
@@ -183,7 +183,7 @@ class Ledger:
 class TokenBucket:
     """Asyncio token bucket. Refills lazily from a monotonic clock."""
 
-    __slots__ = ("_rate", "_capacity", "_tokens", "_updated", "_lock")
+    __slots__ = ("_capacity", "_lock", "_rate", "_tokens", "_updated")
 
     def __init__(self, rate: float, capacity: float | None = None) -> None:
         if rate <= 0:
@@ -236,5 +236,5 @@ class RateLimiter:
         await self._tokens.acquire(max(1, estimated_tokens))
 
     @classmethod
-    def unlimited(cls) -> "RateLimiter":
+    def unlimited(cls) -> RateLimiter:
         return cls(requests_per_minute=10**9, tokens_per_second=10**12)

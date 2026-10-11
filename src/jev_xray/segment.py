@@ -26,23 +26,24 @@ from __future__ import annotations
 
 import copy
 import re
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Iterable, Literal, Mapping, Protocol, Sequence, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from .types import State
 
 __all__ = [
+    "DEFAULT_MASK",
+    "AblationMode",
+    "JsonFieldSegmenter",
+    "LineSegmenter",
     "Segment",
     "Segmenter",
-    "AblationMode",
     "SentenceSegmenter",
-    "LineSegmenter",
     "TurnSegmenter",
-    "JsonFieldSegmenter",
-    "DEFAULT_MASK",
     "WithinSpan",
-    "get_segmenter",
     "auto_segmenter",
+    "get_segmenter",
     "reassemble",
 ]
 
@@ -151,15 +152,14 @@ class _SpanSegmenter:
 # Tokens that end in a full stop without ending a sentence. Splitting after one
 # of these produces a fragment, and a fragment is worse than a coarse segment:
 # ablating "Dr" on its own measures nothing anybody wrote.
-_ABBREVIATIONS = frozenset(
-    """
-    mr mrs ms mx dr prof sr jr st rev hon capt sgt lt col gen
-    inc ltd llc llp co corp dept est fig no vs etc al
-    jan feb mar apr jun jul aug sept sep oct nov dec
-    mon tue tues wed thu thur thurs fri sat sun
-    approx avg max min dept ref acct amt apt
-    """.split()
-)
+_TITLES = ("mr", "mrs", "ms", "mx", "dr", "prof", "sr", "jr", "st", "rev", "hon")
+_RANKS = ("capt", "sgt", "lt", "col", "gen")
+_ORG = ("inc", "ltd", "llc", "llp", "co", "corp", "dept", "est", "fig", "no", "vs")
+_REFS = ("etc", "al", "ref", "acct", "amt", "apt", "approx", "avg", "max", "min")
+_MONTHS = ("jan", "feb", "mar", "apr", "jun", "jul", "aug", "sept", "sep", "oct", "nov", "dec")
+_DAYS = ("mon", "tue", "tues", "wed", "thu", "thur", "thurs", "fri", "sat", "sun")
+
+_ABBREVIATIONS = frozenset((*_TITLES, *_RANKS, *_ORG, *_REFS, *_MONTHS, *_DAYS))
 
 # "e.g." and "i.e." end in a stop after a single letter, which the initials rule
 # below would also catch, but naming them is clearer than relying on that.
@@ -315,7 +315,7 @@ class WithinSpan(_SpanSegmenter):
 
     def __init__(
         self,
-        inner: "_SpanSegmenter",
+        inner: _SpanSegmenter,
         start: int,
         end: int,
         *,

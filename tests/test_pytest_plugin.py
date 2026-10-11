@@ -82,10 +82,15 @@ class TestConfigurationDetection:
 
 class TestFixtures:
     def test_the_live_fixture_is_registered(self, request):
-        # Registered through the pytest11 entry point, so it resolves without
-        # any conftest wiring in the consuming project.
-        assert "jev" in request.fixturenames or True
-        assert request.config.pluginmanager.hasplugin("jev_xray")
+        # Registered through the pytest11 entry point, so it resolves without any
+        # conftest wiring in the consuming project. Asserted via the fixture
+        # registry rather than request.fixturenames, which only lists fixtures
+        # this test actually requested -- the earlier version of this check
+        # ended in `or True` and therefore asserted nothing at all.
+        available = request.config.pluginmanager.hasplugin("jev_xray")
+        assert available
+        assert "jev" in request._fixturemanager._arg2fixturedefs
+        assert "jev_fake" in request._fixturemanager._arg2fixturedefs
 
     def test_the_fake_fixture_needs_no_credentials(self, jev_fake):
         assert jev_fake.model

@@ -22,18 +22,19 @@ is, at worst, a user being cautious.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
-from typing import Iterable, Literal, Sequence
+from typing import Literal
 
 from .segment import Segment
 
 __all__ = [
-    "TrustBoundary",
+    "DangerousDirection",
     "InjectionFinding",
     "InjectionReport",
+    "TrustBoundary",
     "locate_injection",
-    "DangerousDirection",
 ]
 
 DangerousDirection = Literal["support", "oppose", "both"]
@@ -73,7 +74,7 @@ class TrustBoundary:
         paths: Iterable[str] = (),
         patterns: Iterable[str] = (),
         ids: Iterable[int] = (),
-    ) -> "TrustBoundary":
+    ) -> TrustBoundary:
         return cls(
             paths=tuple(paths), patterns=tuple(patterns), ids=frozenset(ids)
         )
@@ -147,8 +148,8 @@ class InjectionReport:
     def summary(self) -> str:
         lines = [
             f"  trust boundary: {self.boundary.describe()}",
-            f"  untrusted text accounts for {self.untrusted_share:.0%} of the "
-            f"influence on this decision",
+            (f"  untrusted text accounts for {self.untrusted_share:.0%} of the "
+            f"influence on this decision"),
             f"  {self.detail}",
         ]
         if self.dangerous:

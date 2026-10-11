@@ -53,6 +53,8 @@ Issues = "https://github.com/aishwary-dongre/jev-xray/issues"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
 ]
 
 [project.scripts]
@@ -82,3 +84,58 @@ include = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "F",    # pyflakes: genuine mistakes
+    "E",
+    "W",
+    "I",    # import order
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",
+    "C4",
+    "ISC",
+    "PIE",
+    "RUF",
+]
+
+ignore = [
+    # Our error messages are deliberately long and actionable. "raise a bare
+    # exception and put the detail elsewhere" is the opposite of what this
+    # package is for: a budget error that names the knob to turn is the feature.
+    "TRY003",
+    # Assigning a long message to a variable first, for the same reason.
+    "EM101",
+    "EM102",
+    # __all__ is grouped by concern with comments -- questions, probes,
+    # segmentation, plumbing, rendering -- which reads better than alphabetical
+    # and is the order someone exploring the package wants.
+    "RUF022",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    # Shared fixtures as class attributes are idiomatic in a test class and are
+    # never mutated. Annotating each with ClassVar is noise here.
+    "RUF012",
+]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/jev_xray"]
+# Not strict. Most of this package is annotated, but the probe and estimator
+# results are deliberately duck-typed so one renderer can handle either
+# estimator, and forcing a Protocol on that would cost more clarity than it buys.
+# These settings catch the errors that bite without demanding total coverage.
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+no_implicit_optional = true
+strict_equality = true
+check_untyped_defs = true

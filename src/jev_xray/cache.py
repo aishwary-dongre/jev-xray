@@ -15,12 +15,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from .types import SystemOneRequest
 
-__all__ = ["CacheKey", "ResponseCache", "MemoryCache", "DiskCache", "NullCache", "cache_key"]
+__all__ = ["CacheKey", "DiskCache", "MemoryCache", "NullCache", "ResponseCache", "cache_key"]
 
 CacheKey = str
 
@@ -93,7 +94,7 @@ class DiskCache:
     as sensitive; the shipped .gitignore already excludes the default location.
     """
 
-    __slots__ = ("_root", "_memory")
+    __slots__ = ("_memory", "_root")
 
     def __init__(self, root: str | Path, *, memoize: bool = True) -> None:
         self._root = Path(root)

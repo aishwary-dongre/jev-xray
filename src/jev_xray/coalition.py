@@ -19,12 +19,12 @@ layer just avoids building the request at all.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping, Sequence
 
 from .budget import Budget, BudgetExceeded, Ledger
 from .client import Client
-from .segment import AblationMode, DEFAULT_MASK, Segment, Segmenter
+from .segment import DEFAULT_MASK, AblationMode, Segment, Segmenter
 from .types import Answer, Question, State, Target
 
 __all__ = ["CoalitionEvaluator", "CoalitionFailure"]
@@ -78,7 +78,7 @@ class CoalitionEvaluator:
         budget: Budget,
         ledger: Ledger,
         concurrency: int = 8,
-    ) -> "CoalitionEvaluator":
+    ) -> CoalitionEvaluator:
         questions = {question_id: question}
         baseline = await client.ask(state, questions, ledger=ledger, budget=budget)
         answer = baseline.answers[question_id]
@@ -181,7 +181,7 @@ class CoalitionEvaluator:
             *(self.value(c) for c in ordered), return_exceptions=True
         )
 
-        for coalition, result in zip(ordered, results):
+        for coalition, result in zip(ordered, results, strict=True):
             if not isinstance(result, BaseException):
                 continue
             if isinstance(result, BudgetExceeded):

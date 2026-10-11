@@ -67,10 +67,10 @@ class DeepExplanation:
             parts += [
                 "",
                 "warning",
-                f"  an empty state already answers {prior:.4f}, which lands on the "
+                (f"  an empty state already answers {prior:.4f}, which lands on the "
                 f"same side of {self.flipping.decision.describe()} as the full "
                 f"state.\n  this question cannot discriminate: the answer is mostly "
-                f"a prior the input never touches.",
+                f"a prior the input never touches."),
             ]
 
         return "\n".join(parts)

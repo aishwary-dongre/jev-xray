@@ -19,25 +19,26 @@ before treating any of it as settled.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping, Sequence, Union
+from typing import Any, Literal
 
 __all__ = [
-    "State",
-    "Instructions",
-    "Question",
-    "Choice",
-    "Score",
-    "Noul",
     "Answer",
+    "Choice",
     "ChoiceAnswer",
-    "ScoreAnswer",
+    "Instructions",
+    "InvalidResponse",
+    "Noul",
     "NoulAnswer",
-    "Usage",
+    "Question",
+    "Score",
+    "ScoreAnswer",
+    "State",
     "SystemOneRequest",
     "SystemOneResponse",
     "Target",
-    "InvalidResponse",
+    "Usage",
     "is_alias",
     "parse_answer",
     "parse_response",
@@ -47,11 +48,11 @@ __all__ = [
 # Jev accepts a string, a JSON object, or an array of text values as state.
 # There is no image, audio or video input; non-text has to be pre-processed
 # into text or structured fields by the caller.
-State = Union[str, Mapping[str, Any], Sequence[Any]]
+State = str | Mapping[str, Any] | Sequence[Any]
 
 # Instructions accept the same three shapes. An object or array lets you put
 # the question in one field and the data it refers to in others.
-Instructions = Union[str, Mapping[str, Any], Sequence[Any]]
+Instructions = str | Mapping[str, Any] | Sequence[Any]
 
 QuestionType = Literal["choice", "score", "noul"]
 
@@ -158,7 +159,7 @@ class Noul:
         return body
 
 
-Question = Union[Choice, Score, Noul]
+Question = Choice | Score | Noul
 
 
 # --------------------------------------------------------------------------
@@ -193,7 +194,7 @@ class NoulAnswer:
     noul: float
 
 
-Answer = Union[ChoiceAnswer, ScoreAnswer, NoulAnswer]
+Answer = ChoiceAnswer | ScoreAnswer | NoulAnswer
 
 
 @dataclass(frozen=True, slots=True)
@@ -438,7 +439,7 @@ class Target:
     label: str | None = None
 
     @classmethod
-    def baseline(cls, answer: Answer) -> "Target":
+    def baseline(cls, answer: Answer) -> Target:
         """Derive the natural target from a baseline answer."""
         if isinstance(answer, NoulAnswer):
             return cls("noul")
