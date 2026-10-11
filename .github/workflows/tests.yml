@@ -49,9 +49,13 @@ jobs:
           cache: pip
 
       - name: Install
+        # The dev extras, not a bare install: the pytest plugin imports pytest,
+        # so without it mypy cannot resolve the module and the job fails for a
+        # reason that has nothing to do with the code. ruff and mypy are pinned
+        # in the dev extras so CI and a laptop run the same versions.
         run: |
           python -m pip install --upgrade pip
-          pip install -e "." ruff mypy
+          pip install -e ".[dev]"
 
       - name: Ruff
         run: ruff check src tests
