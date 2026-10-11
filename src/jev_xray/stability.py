@@ -523,7 +523,10 @@ async def option_order_flip(ctx: ProbeContext, *, shuffles: int = 4) -> ProbeRes
         )
         answer = response.answers[ctx.question_id]
         values.append(ctx.target.read(answer))
-        choices.add(answer.choice)
+        # The question is a Choice, but the answer type is a union until
+        # narrowed, and a host returning the wrong shape should not crash a
+        # stability run.
+        choices.add(getattr(answer, "choice", None))
 
     spread = max(values) - min(values)
     flipped = len(choices) > 1

@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
@@ -171,7 +171,7 @@ def assert_no_injection(
     untrusted: Sequence[str],
     question_id: str = "q",
     segmenter: str = "auto",
-    dangerous_direction: str = "support",
+    dangerous_direction: Literal["support", "oppose", "both"] = "support",
     method: str = "shapley",
     match_text: bool = False,
     **kwargs: Any,

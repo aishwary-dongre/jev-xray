@@ -22,7 +22,8 @@ import html
 from datetime import UTC, datetime
 from typing import Any
 
-from .attribution import Attribution, SegmentEffect
+from .results import AnyAttribution, AnyEffect, describe_failure
+from .shapley import ShapleyAttribution
 
 __all__ = ["stability_to_html", "to_html"]
 
@@ -111,7 +112,7 @@ footer code { background: var(--panel); padding: 1px 5px; border-radius: 3px; }
 """
 
 
-def _shade(effect: SegmentEffect, strongest: float) -> str:
+def _shade(effect: AnyEffect, strongest: float) -> str:
     """Background colour for one segment, scaled against the strongest effect."""
     if strongest <= _EPSILON or effect.magnitude < _EPSILON:
         return ""
@@ -121,7 +122,7 @@ def _shade(effect: SegmentEffect, strongest: float) -> str:
     return f"background: rgba(var({channel}), {alpha:.2f});"
 
 
-def _heatmap(attribution: Attribution, strongest: float) -> str:
+def _heatmap(attribution: AnyAttribution, strongest: float) -> str:
     """The state with each segment tinted by its influence. Text states only."""
     text = attribution.state
     if not isinstance(text, str):
@@ -167,7 +168,7 @@ def _heatmap(attribution: Attribution, strongest: float) -> str:
     return f'<div class="state">{"".join(out)}</div>'
 
 
-def _bars(attribution: Attribution, strongest: float, limit: int) -> str:
+def _bars(attribution: AnyAttribution, strongest: float, limit: int) -> str:
     rows: list[str] = []
     for effect in attribution.ranked()[:limit]:
         share = 0.0 if strongest <= _EPSILON else min(1.0, effect.magnitude / strongest)
@@ -192,8 +193,8 @@ def _bars(attribution: Attribution, strongest: float, limit: int) -> str:
     return f'<table class="bars">{"".join(rows)}</table>'
 
 
-def _diagnostics(attribution: Attribution) -> str:
-    if getattr(attribution, "exact", False):
+def _diagnostics(attribution: AnyAttribution) -> str:
+    if isinstance(attribution, ShapleyAttribution) and attribution.exact:
         return (
             f'<div class="note ok"><p><b>Exact attribution.</b> Every one of the '
             f"{attribution.coalitions_evaluated} possible combinations of this "
@@ -204,7 +205,7 @@ def _diagnostics(attribution: Attribution) -> str:
             f"correctly here, which leave-one-out cannot do.</p></div>"
         )
 
-    if getattr(attribution, "permutations", 0):
+    if isinstance(attribution, ShapleyAttribution) and attribution.permutations:
         return (
             f'<div class="note"><p><b>Sampled attribution.</b> Estimated from '
             f"{attribution.permutations} random orderings over "
@@ -331,7 +332,7 @@ def _minimal_blocks(deep: Any) -> str:
 
 
 def to_html(
-    attribution: Attribution,
+    attribution: AnyAttribution,
     *,
     limit: int = 12,
     title: str | None = None,
@@ -391,8 +392,8 @@ def to_html(
     failures = ""
     if attribution.failures:
         items = "".join(
-            f"<li>{html.escape(seg.label)}: {html.escape(why)}</li>"
-            for seg, why in attribution.failures
+            f"<li>{html.escape(describe_failure(key))}: {html.escape(why)}</li>"
+            for key, why in attribution.failures
         )
         failures = (
             f'<h2>failed ablations</h2><div class="note"><p>These segments have no '

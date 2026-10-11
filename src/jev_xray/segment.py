@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import copy
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, runtime_checkable
 
@@ -468,13 +468,17 @@ def _edit_path(root: Any, path: str, *, mask: str | None) -> None:
             return
 
     leaf = parts[-1]
-    if isinstance(node, Mapping):
+    if isinstance(node, MutableMapping):
         if leaf not in node:
             return
         if mask is None:
-            del node[leaf]  # type: ignore[union-attr]
+            del node[leaf]
         else:
-            node[leaf] = mask  # type: ignore[index]
+            node[leaf] = mask
+        return
+    if isinstance(node, Mapping):
+        # Read-only mapping: nothing to edit, and silently doing nothing is
+        # better than raising from inside an ablation loop.
         return
 
     if isinstance(node, list):
@@ -528,7 +532,7 @@ def get_segmenter(spec: str | Segmenter, **kwargs: Any) -> Segmenter:
         raise ValueError(
             f"unknown segmenter {spec!r}; choose from {sorted(set(_REGISTRY))}"
         ) from None
-    return factory(**kwargs)  # type: ignore[return-value]
+    return factory(**kwargs)
 
 
 def auto_segmenter(state: State, **kwargs: Any) -> Segmenter:

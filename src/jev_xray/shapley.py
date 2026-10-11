@@ -298,8 +298,11 @@ async def shapley(
 
     await evaluator.values(coalitions)
 
-    known = {c: evaluator.known(c) for c in coalitions}
-    known = {c: v for c, v in known.items() if v is not None}
+    known: dict[frozenset[int], float] = {}
+    for coalition in coalitions:
+        value = evaluator.known(coalition)
+        if value is not None:
+            known[coalition] = value
 
     empty_value = known.get(frozenset())
     if empty_value is None:

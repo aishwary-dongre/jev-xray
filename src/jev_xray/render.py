@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 import sys
 
-from .attribution import Attribution, SegmentEffect
+from .results import AnyAttribution, AnyEffect, describe_failure
 
 __all__ = ["heatmap", "report", "supports_color", "table"]
 
@@ -50,7 +50,7 @@ def _bin(magnitude: float, strongest: float) -> int:
     return min(4, int(share * 5))
 
 
-def _paint(text: str, effect: SegmentEffect, strongest: float, color: bool) -> str:
+def _paint(text: str, effect: AnyEffect, strongest: float, color: bool) -> str:
     if not color:
         return text
     index = _bin(effect.magnitude, strongest)
@@ -60,7 +60,7 @@ def _paint(text: str, effect: SegmentEffect, strongest: float, color: bool) -> s
     return f"\x1b[48;5;{palette[index]}m{_FG_BLACK}{text}{_RESET}"
 
 
-def heatmap(attribution: Attribution, *, color: bool | None = None) -> str:
+def heatmap(attribution: AnyAttribution, *, color: bool | None = None) -> str:
     """Paint the original state, segment by segment.
 
     Only meaningful for a text state, where segments are spans of the original
@@ -95,7 +95,7 @@ def heatmap(attribution: Attribution, *, color: bool | None = None) -> str:
     return "".join(pieces) + "\n" + legend
 
 
-def table(attribution: Attribution, *, limit: int = 10, color: bool | None = None) -> str:
+def table(attribution: AnyAttribution, *, limit: int = 10, color: bool | None = None) -> str:
     """Ranked segments, strongest influence first."""
     color = supports_color() if color is None else color
     rows = attribution.ranked()[:limit]
@@ -124,7 +124,7 @@ def table(attribution: Attribution, *, limit: int = 10, color: bool | None = Non
     return "\n".join(lines)
 
 
-def report(attribution: Attribution, *, color: bool | None = None, limit: int = 10) -> str:
+def report(attribution: AnyAttribution, *, color: bool | None = None, limit: int = 10) -> str:
     """Everything worth printing for one explanation."""
     color = supports_color() if color is None else color
     blocks = [
@@ -151,7 +151,10 @@ def report(attribution: Attribution, *, color: bool | None = None, limit: int = 
 
     if attribution.failures:
         blocks += ["", _dimmed("failed ablations", color)]
-        blocks += [f"  {seg.label}: {why}" for seg, why in attribution.failures]
+        blocks += [
+            f"  {describe_failure(key)}: {why}"
+            for key, why in attribution.failures
+        ]
 
     return "\n".join(blocks)
 

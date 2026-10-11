@@ -28,6 +28,7 @@ from .types import (
     Choice,
     InvalidResponse,
     Noul,
+    Question,
     Score,
     SystemOneRequest,
     Target,
@@ -41,7 +42,7 @@ PROBE_STATE = (
     "I would like one of the charges reversed."
 )
 
-PROBE_QUESTIONS = {
+PROBE_QUESTIONS: dict[str, Question] = {
     "department": Choice(
         instructions="Which team should handle this message",
         criteria={

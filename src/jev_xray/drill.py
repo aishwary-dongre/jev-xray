@@ -42,6 +42,7 @@ from .segment import (
     Segmenter,
     TurnSegmenter,
     WithinSpan,
+    _SpanSegmenter,
     get_segmenter,
 )
 from .shapley import ShapleyAttribution, shapley
@@ -211,6 +212,13 @@ async def drill_down(
     ledger = ledger if ledger is not None else Ledger()
 
     fine_segmenter = get_segmenter(fine) if isinstance(fine, str) else fine
+    if not isinstance(fine_segmenter, _SpanSegmenter):
+        raise TypeError(
+            f"the fine segmenter must work over spans of text, and "
+            f"{type(fine_segmenter).__name__} does not. drilling restricts "
+            f"segmentation to a region of the string, which a field segmenter "
+            f"has no notion of."
+        )
     coarse_segmenter = (
         _pick_coarse(fine_segmenter)
         if coarse is None
