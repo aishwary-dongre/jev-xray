@@ -1,0 +1,16 @@
+{
+  "_comment": "Mock ambiguous support ticket for testing whether a Choice decision changes when its options are reordered. Run: jev-xray stability examples/mock_option_order.json -q route --provider langsmith --segmenter sentence",
+  "state": "My replacement arrived, but I was charged again and the tracking page still shows the old shipment. I am not sure whether this belongs with billing or delivery support. Please route this to whoever can fix both issues.",
+  "questions": {
+    "route": {
+      "type": "choice",
+      "instructions": "Which team should handle this ticket?",
+      "criteria": {
+        "billing": "Duplicate charges, invoices, refunds, and payment problems",
+        "logistics": "Shipping, tracking, delivery, and replacement problems",
+        "support": "General product help that is neither billing nor delivery",
+        "other": "Anything not covered by the other options"
+      }
+    }
+  }
+}
