@@ -1,0 +1,30 @@
+{
+  "_comment": "A multi-turn support conversation that is long enough to benefit from coarse-to-fine attribution. Each speaker turn is a natural coarse segment; the decisive evidence is buried inside one of the customer turns. Run with: jev-xray explain examples/mock_multiturn.json -q refund_requested --method drill --provider langsmith",
+
+  "state": "Customer: Hi, I received order B-221 three days ago and the packaging was torn open on arrival. The contents looked okay at first glance.\nAgent: I'm sorry to hear that. Let me pull up your order. Can you describe the item condition in more detail?\nCustomer: I went to use it this morning and the screen has a crack that wasn't there when I bought it. It must have happened in transit. I paid $340 for this and I expect it to work. Your website promises damage-free delivery.\nAgent: I completely understand. Damage in transit is covered under our policy. I can offer a replacement or a full refund.\nCustomer: A refund please. I don't want a replacement because I found a better deal elsewhere. Process it back to my original payment method.\nAgent: Understood, I'll process that now. You should see the refund within 3 to 5 business days.",
+
+  "questions": {
+    "refund_requested": {
+      "type": "noul",
+      "instructions": "The customer has explicitly asked for a monetary refund.",
+      "criteria": {
+        "true": "The customer stated or clearly implied they want money returned",
+        "false": "The customer wants a replacement, information, or has not asked for money back"
+      }
+    },
+    "agent_resolved": {
+      "type": "noul",
+      "instructions": "The agent has already committed to a resolution in this conversation."
+    },
+    "outcome": {
+      "type": "choice",
+      "instructions": "What resolution was agreed in this conversation?",
+      "criteria": {
+        "refund": "A monetary refund was agreed",
+        "replacement": "A replacement item was agreed",
+        "investigation": "The issue was escalated for further investigation",
+        "unresolved": "No resolution was reached"
+      }
+    }
+  }
+}
