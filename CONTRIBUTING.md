@@ -17,7 +17,7 @@ pip install -e ".[dev]"
 Verify everything works:
 
 ```bash
-pytest            # 404 tests, all offline, no key needed
+pytest            # 433 tests, all offline, no key needed
 jev-xray demo     # offline attribution demo
 jev-xray demo --scenario injection  # injection locator demo
 ```
@@ -63,7 +63,7 @@ src/jev_xray/
   pytest_plugin.py  assert_stable, assert_no_injection, jev fixture
   results.py        AnyAttribution / AnyEffect union types
 
-tests/              404 tests, all offline
+tests/              433 tests, all offline
 examples/           ready-to-run JSON fixtures
 ```
 
@@ -75,6 +75,11 @@ examples/           ready-to-run JSON fixtures
 project has a fixture with planted evidence so the correct output is known before
 running. If you add a new probe, estimator, or segmenter, build a fixture that
 would catch a regression.
+
+**Example fixtures are checked offline.** `tests/test_examples.py` loads every
+`examples/*.json` the way the CLI does and confirms that the `-q` and
+`--untrusted` names in its `_comment` command exist in the file. If you add a
+fixture, put a runnable command in its `_comment` and the test covers it.
 
 **Failing tests are as welcome as passing ones.** If you find a case the tool
 handles wrong, a failing test that demonstrates it is a complete contribution

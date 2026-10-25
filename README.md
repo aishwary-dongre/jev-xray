@@ -447,7 +447,7 @@ produces an approval.
 
 ## Status
 
-Working. 404 tests. Attribution, stability and injection are validated against a
+Working. 433 tests. Attribution, stability and injection are validated against a
 live hosted model. Version diffing is tested offline only: it needs two model
 versions, and only one free endpoint is available.
 
