@@ -155,6 +155,33 @@ jobs:
           jev-xray stability examples/ticket.json -q refund_requested \
             --fake --segmenter sentence || true
 
+      - name: The mock fixtures run through the CLI
+        # These say nothing meaningful without a live provider, so this proves
+        # the plumbing only: each fixture loads, its documented command parses,
+        # and the field segmenter splits the incident into its five fields. The
+        # stability exit code is not usable here (the signal-free fake makes the
+        # question unusable, and a bad fixture also exits 1), so that step
+        # checks for a probe in the output instead.
+        run: |
+          jev-xray explain examples/mock_rag_injection.json -q safe_to_execute \
+            --fake --segmenter field --untrusted retrieved_document \
+            --method loo --json > rag.json
+          python - <<'PY'
+          import json
+          labels = [s["label"] for s in json.load(open("rag.json"))["segments"]]
+          expected = ["proposed_action", "policy", "user_request", "retrieved_document", "account_record"]
+          assert labels == expected, labels
+          print("ok: the RAG incident splits into its five fields")
+          PY
+          out=$(jev-xray explain examples/mock_multiturn.json -q refund_requested \
+            --fake --method drill --no-color)
+          grep -q "coarse level (turn)" <<< "$out"
+          echo "ok: the multi-turn conversation drills down by turn"
+          out=$(jev-xray stability examples/mock_option_order.json -q route \
+            --fake --segmenter sentence || true)
+          grep -q "prior saturation" <<< "$out"
+          echo "ok: the option-order fixture reaches the stability probes"
+
       - name: Version diff runs over a corpus
         # The fake answers the same regardless of the model name, so this
         # exercises the plumbing and the report shape rather than a real flip.
