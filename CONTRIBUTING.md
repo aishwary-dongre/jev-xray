@@ -17,7 +17,7 @@ pip install -e ".[dev]"
 Verify everything works:
 
 ```bash
-pytest            # 433 tests, all offline, no key needed
+pytest            # 449 tests, all offline, no key needed
 jev-xray demo     # offline attribution demo
 jev-xray demo --scenario injection  # injection locator demo
 ```
@@ -63,7 +63,7 @@ src/jev_xray/
   pytest_plugin.py  assert_stable, assert_no_injection, jev fixture
   results.py        AnyAttribution / AnyEffect union types
 
-tests/              433 tests, all offline
+tests/              449 tests, all offline
 examples/           ready-to-run JSON fixtures
 ```
 

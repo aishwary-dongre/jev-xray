@@ -863,14 +863,16 @@ def _load_dotenv(path: Path | None = None) -> None:
 
     Deliberately not a dependency and deliberately not done by the library: a
     program embedding jev-xray owns its own configuration. Existing environment
-    variables always win, so an explicit export overrides the file.
+    variables always win, so an explicit export overrides the file. A file that
+    cannot be read, or is not valid UTF-8, is ignored rather than fatal: this
+    runs before argument parsing, so raising here would break every command.
     """
     path = path or Path.cwd() / ".env"
     if not path.is_file():
         return
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return
     for line in lines:
         line = line.strip()

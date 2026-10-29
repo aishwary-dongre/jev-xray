@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `.env` that is not valid UTF-8 no longer crashes every command.** The CLI
+  reads `.env` before it parses its arguments, and a file saved as Latin-1 (or
+  with any stray non-UTF-8 byte) raised an uncaught `UnicodeDecodeError`, so
+  `jev-xray` printed a traceback whatever you asked it to do. An unreadable or
+  non-UTF-8 `.env` is now ignored, as a missing one already was. Nothing from
+  such a file is applied; save it as UTF-8 to have its keys loaded.
+
 ---
 
 ## [0.1.0] — 2026-10-10
